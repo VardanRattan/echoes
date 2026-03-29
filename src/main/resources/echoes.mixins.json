@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "com.vardanrattan.echoes.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"LimbAnimatorMixin",
+		"TameableEntityMixin",
+		"CraftingResultSlotMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}
