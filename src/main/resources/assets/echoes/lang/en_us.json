@@ -1,0 +1,31 @@
+{
+  "item.echoes.echo_crystal": "Echo Crystal",
+  "item.echoes.echo_crystal.desc": "Reveals the echoes of those who walked here.",
+  "item.echoes.echo_crystal.manual.started": "Recording... leave your echo.",
+  "item.echoes.echo_crystal.manual.disabled": "Manual recording is disabled on this server.",
+
+  "commands.echoes.optout.success.visibility": "You will no longer leave echoes.",
+  "commands.echoes.optout.success.display": "You will no longer see echoes.",
+  "commands.echoes.optout.success.all": "Opted out of all echo tracking.",
+  "commands.echoes.optin.success.visibility": "You will now leave echoes again.",
+  "commands.echoes.optin.success.display": "You will now see echoes again.",
+  "commands.echoes.clear.success": "Cleared %s echoes in a %s block radius.",
+  "commands.echoes.clear.none": "No echoes found in range.",
+
+  "echoes.event.death": "Death",
+  "echoes.event.structure_discovery": "Structure Discovery",
+  "echoes.event.dimension_enter": "Dimension Entry",
+  "echoes.event.boss_kill": "Boss Kill",
+  "echoes.event.major_craft": "Major Craft",
+  "echoes.event.biome_discovery": "Biome Discovery",
+  "echoes.event.taming": "Taming",
+  "echoes.event.world_first": "World First",
+  "echoes.event.manual_crystal": "Left Mark",
+  "echoes.event.journey_long": "Long Journey",
+  "echoes.event.journey_marathon": "Marathon Journey",
+
+  "echoes.tier.whisper": "Whisper",
+  "echoes.tier.mark": "Mark",
+  "echoes.tier.scar": "Scar",
+  "echoes.tier.world_first": "World First"
+}

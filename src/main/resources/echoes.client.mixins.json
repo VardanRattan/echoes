@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.vardanrattan.echoes.mixin.client",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "GhostSuppressMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

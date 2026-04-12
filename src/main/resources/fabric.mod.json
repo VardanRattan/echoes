@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "echoes",
+	"version": "${version}",
+	"name": "Echoes",
+	"description": "Echoes makes the world remember. Deaths, discoveries, and milestones leave ghostly imprints for others to find.",
+	"authors": [
+		"vardanrattan"
+	],
+	"contact": {
+		"homepage": "https://modrinth.com/mod/echoes",
+		"sources": "https://github.com/vardanrattan/echoes"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/echoes/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.vardanrattan.echoes.Echoes"
+		],
+		"client": [
+			"com.vardanrattan.echoes.EchoesClient"
+		]
+	},
+	"mixins": [
+		"echoes.mixins.json",
+		{
+			"config": "echoes.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
