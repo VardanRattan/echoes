@@ -2,7 +2,7 @@ package com.vardanrattan.echoes.mixin.client;
 
 import com.vardanrattan.echoes.render.GhostPlayerRenderer;
 import net.minecraft.client.renderer.entity.EntityRenderer;
-import net.minecraft.world.entity.Entity;
+import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,7 +27,7 @@ public class GhostSuppressMixin {
      * entities.
      */
     @Inject(method = "getShadowRadius", at = @At("HEAD"), cancellable = true)
-    private void echoes$suppressGhostShadow(Entity entity, CallbackInfoReturnable<Float> cir) {
+    private void echoes$suppressGhostShadow(EntityRenderState state, CallbackInfoReturnable<Float> cir) {
         if (GhostPlayerRenderer.isRenderingGhost()) {
             cir.setReturnValue(0.0f);
         }

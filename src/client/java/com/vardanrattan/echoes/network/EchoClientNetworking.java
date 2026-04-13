@@ -8,7 +8,7 @@ import com.vardanrattan.echoes.render.GhostPlayerRenderer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.particles.ParticleTypes;
@@ -29,12 +29,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Client-side networking handlers.
  *
- * Architecture (A1 + A2):
- * - ghost.tick() (state advance) runs on END_CLIENT_TICK.
- * - All draw calls run on WorldRenderEvents.AFTER_ENTITIES so we
- *   have access to MatrixStack, VertexConsumer, and sub-tick
- *   tickDelta for smooth interpolation.
- * - Audio (C1) is also triggered here on echo start.
+ * Updated for Mojang mappings (net.minecraft.client.renderer package).
  */
 public final class EchoClientNetworking {
 
@@ -156,22 +151,17 @@ public final class EchoClientNetworking {
 
         // -----------------------------------------------------------------------
         // A1 + A2: LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES — all draw calls happen here.
-        //
-        // This gives us:
-        // - PoseStack (camera-relative)
-        // - MultiBufferSource (for translucent geometry)
-        // - sub-tick tickDelta (for smooth lerp)
         // -----------------------------------------------------------------------
         LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(context -> {
             if (activeGhosts.isEmpty())
                 return;
 
-            PoseStack matrices = context.poseStack();
-            if (matrices == null)
+            PoseStack poseStack = context.poseStack();
+            if (poseStack == null)
                 return;
 
-            MultiBufferSource consumers = context.bufferSource();
-            if (consumers == null)
+            SubmitNodeCollector collector = context.submitNodeCollector();
+            if (collector == null)
                 return;
 
             float tickDelta = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
@@ -187,8 +177,8 @@ public final class EchoClientNetworking {
                 }
 
                 GhostPlayerRenderer.renderGhost(
-                        matrices,
-                        consumers,
+                        poseStack,
+                        collector,
                         tickDelta,
                         ag.ghost(),
                         ag.tier(),
@@ -199,10 +189,6 @@ public final class EchoClientNetworking {
         });
     }
 
-    // -------------------------------------------------------------------------
-    // C1: Vanilla sound playback on echo start.
-    // All sounds spatially anchored, SoundCategory.PLAYERS.
-    // -------------------------------------------------------------------------
     private static void playEchoStartSound(EchoPlaybackPayload payload, Minecraft client) {
         if (client.level == null)
             return;
@@ -212,7 +198,6 @@ public final class EchoClientNetworking {
         double ay = anchor.getY();
         double az = anchor.getZ() + 0.5;
 
-        // Primary tier sound.
         var primarySound = switch (payload.tier()) {
             case WHISPER -> SoundEvents.AMETHYST_BLOCK_CHIME;
             case MARK -> SoundEvents.ENDERMAN_AMBIENT;
@@ -224,20 +209,14 @@ public final class EchoClientNetworking {
             case SCAR, WORLD_FIRST -> 0.50f;
         };
 
-        // Use the Entity-based playSound overload: (Entity, x, y, z, sound, cat, vol, pitch)
         client.level.playSound(null, ax, ay, az, primarySound, SoundSource.PLAYERS, primaryVol, 1.5f);
 
-        // Death echoes additionally play the death sound pitched down.
         if (payload.eventType() == com.vardanrattan.echoes.data.EchoEventType.DEATH) {
             client.level.playSound(null, ax, ay, az,
                     SoundEvents.PLAYER_DEATH, SoundSource.PLAYERS, 0.4f, 0.7f);
         }
     }
 
-    /**
-     * F5: Performs a client-side raycast against currently active ghosts.
-     * Returns true if a ghost was hit and its metadata shown.
-     */
     public static boolean tryShowGhostTooltip(Minecraft client) {
         if (activeGhosts.isEmpty() || client.player == null) return false;
 
@@ -253,12 +232,8 @@ public final class EchoClientNetworking {
             ActiveGhost ag = entry.getValue();
             if (ag.ghost().isFinished()) continue;
 
-            // Simplified collision check: Treat the ghost as a 0.6x1.8 box at its anchor.
-            // In a real mod, we'd use the ghost's actual interpolated position.
-            // Let's get the ghost's current interpolated world position.
             Vec3 ghostPos = ag.ghost().getInterpolatedPosition(ag.anchor(), 1.0f);
             
-            // Box check
             net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
                     ghostPos.x - 0.3, ghostPos.y, ghostPos.z - 0.3,
                     ghostPos.x + 0.3, ghostPos.y + 1.8, ghostPos.z + 0.3
@@ -284,11 +259,9 @@ public final class EchoClientNetworking {
     }
 
     private static void showMetadataTooltip(Minecraft client, ActiveGhost ag) {
-        // F5: player name, relative time, event type
         long ageMs = System.currentTimeMillis() - ag.startTimeMs();
         String relativeTime = formatRelativeTime(ageMs);
 
-        // F6: Use EchoPrivacy-like logic for name resolution
         String displayName = ag.playerName();
         if (com.vardanrattan.echoes.config.EchoesConfig.get().isAnonymizeAll() || 
             com.vardanrattan.echoes.config.EchoesConfig.get().isHidePlayerNames()) {
@@ -326,7 +299,6 @@ public final class EchoClientNetworking {
         for (var f : payload.frames()) {
             maxTickOffset = Math.max(maxTickOffset, f.getTickOffset());
         }
-        // Add fade padding (~1.5s) and ensure non-zero.
         return Math.max(20, maxTickOffset + (20 * 2));
     }
 }

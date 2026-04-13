@@ -14,15 +14,16 @@ import net.minecraft.world.item.Rarity;
  */
 public final class EchoItems {
 
-public static final Item ECHO_CRYSTAL = new EchoCrystalItem(
+    public static final ResourceKey<Item> ECHO_CRYSTAL_KEY =
+            ResourceKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath(Echoes.MOD_ID, "echo_crystal"));
+
+    public static final Item ECHO_CRYSTAL = new EchoCrystalItem(
             new Item.Properties()
+                    .setId(ECHO_CRYSTAL_KEY)
                     .stacksTo(1)
                     .durability(16)
                     .rarity(Rarity.UNCOMMON)
     );
-
-public static final ResourceKey<Item> ECHO_CRYSTAL_KEY =
-    ResourceKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath(Echoes.MOD_ID, "echo_crystal"));
     
     private EchoItems() {
     }

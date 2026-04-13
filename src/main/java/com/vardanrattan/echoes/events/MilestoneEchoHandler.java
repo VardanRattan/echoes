@@ -54,7 +54,7 @@ public final class MilestoneEchoHandler {
     }
 
     private static void emitMilestoneEcho(ServerPlayer player, BlockPos pos, EchoEventType type, String milestoneKey) {
-        ServerLevel world = (ServerLevel) player.level();
+        ServerLevel world = player.level();
         EchoWorldState state = EchoWorldState.get(world);
         PlayerEchoData data = state.getOrCreatePlayerData(player.getUUID());
 

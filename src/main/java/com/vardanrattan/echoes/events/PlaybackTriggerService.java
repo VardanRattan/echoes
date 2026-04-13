@@ -52,7 +52,7 @@ public final class PlaybackTriggerService {
             if (player == null || player.isRemoved()) continue;
 
             // Respect display opt-out (player doesn't want to see echoes at all).
-            ServerLevel world = (ServerLevel) player.level();
+            ServerLevel world = player.level();
             EchoWorldState state = EchoWorldState.get(world);
             PlayerEchoData pd = state.getOrCreatePlayerData(player.getUUID());
             if (pd.isDisplayOptedOut()) {

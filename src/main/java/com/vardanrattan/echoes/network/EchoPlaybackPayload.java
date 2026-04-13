@@ -39,7 +39,7 @@ public record EchoPlaybackPayload(
             new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("echoes", "playback"));
 
     public static final StreamCodec<FriendlyByteBuf, EchoPlaybackPayload> CODEC =
-        StreamCodec.of(EchoPlaybackPayload::write, EchoPlaybackPayload::read);
+            StreamCodec.of(EchoPlaybackPayload::write, EchoPlaybackPayload::read);
 
     @Override
     public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {

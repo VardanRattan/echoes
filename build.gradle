@@ -10,6 +10,21 @@ base {
 	archivesName = project.archives_base_name
 }
 
+tasks.register("listClasses") {
+    doLast {
+        configurations.compileClasspath.each { file ->
+            if (file.name.contains("minecraft-client")) {
+                def zip = new java.util.zip.ZipFile(file)
+                zip.entries().each { entry ->
+                    if (entry.name.contains("Player") && entry.name.contains("Renderer")) {
+                        println entry.name
+                    }
+                }
+            }
+        }
+    }
+}
+
 repositories {
 	// Add repositories to retrieve artifacts from in here.
 	// You should only use this when depending on other mods because
@@ -51,6 +66,7 @@ processResources {
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 25
+	it.options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
 }
 
 java {

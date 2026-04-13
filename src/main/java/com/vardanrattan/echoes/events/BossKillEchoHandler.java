@@ -36,7 +36,7 @@ public final class BossKillEchoHandler {
                 ServerPlayer killer = resolvePlayerKiller(attacker);
                 
                 if (killer != null) {
-                    ServerLevel world = (ServerLevel) killer.level();
+                    ServerLevel world = killer.level();
                     EchoWorldState state = EchoWorldState.get(world);
                     
                     emitBossKillEcho(world, killer, state, entity.blockPosition());

@@ -1,0 +1,44 @@
+
+> Configure project :
+Fabric Loom: 1.15.5
+
+> Task :clean
+
+> Task :compileJava
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/events/RecordingSessionManager.java:168: warning: [cast] redundant cast to ServerLevel
+        ServerLevel serverWorld = (ServerLevel) player.level();
+                                  ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/events/RecordingSessionManager.java:258: warning: [cast] redundant cast to ServerLevel
+        ServerLevel level = (ServerLevel) player.level();
+                            ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/events/RecordingSessionManager.java:298: warning: [cast] redundant cast to ServerLevel
+        ServerLevel world = (ServerLevel) player.level();
+                            ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/events/PlaybackTriggerService.java:55: warning: [cast] redundant cast to ServerLevel
+            ServerLevel world = (ServerLevel) player.level();
+                                ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/events/BossKillEchoHandler.java:39: warning: [cast] redundant cast to ServerLevel
+                    ServerLevel world = (ServerLevel) killer.level();
+                                        ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/events/MilestoneEchoHandler.java:57: warning: [cast] redundant cast to ServerLevel
+        ServerLevel world = (ServerLevel) player.level();
+                            ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/network/EchoNetworking.java:55: warning: [cast] redundant cast to ServerLevel
+            ServerLevel world = (ServerLevel) player.level();
+                                ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/command/EchoesCommand.java:94: warning: [cast] redundant cast to ServerLevel
+        ServerLevel level = (ServerLevel) world;
+                            ^
+/home/vr/Desktop/echoes/src/main/java/com/vardanrattan/echoes/command/EchoesCommand.java:129: warning: [cast] redundant cast to ServerLevel
+        ServerLevel level = (ServerLevel) world;
+                            ^
+9 warnings
+
+> Task :processResources
+> Task :classes
+> Task :compileClientJava
+
+[Incubating] Problems report is available at: file:///home/vr/Desktop/echoes/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 3s
+4 actionable tasks: 4 executed

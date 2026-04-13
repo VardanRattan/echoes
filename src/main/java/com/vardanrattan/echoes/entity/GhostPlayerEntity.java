@@ -15,7 +15,7 @@ import java.util.List;
  */
 public final class GhostPlayerEntity {
 
-    public record Pose(float x, float y, float z, float yaw, float pitch) {
+    public record Pose(float x, float y, float z, float yaw, float pitch, float limbSwing, com.vardanrattan.echoes.data.EchoAnimState animationState) {
     }
 
     private final List<EchoFrame> frames;
@@ -93,7 +93,7 @@ public final class GhostPlayerEntity {
 
         if (frames.size() == 1) {
             EchoFrame f = frames.get(0);
-            return new Pose(f.getRelX(), f.getRelY(), f.getRelZ(), f.getYaw(), f.getPitch());
+            return new Pose(f.getRelX(), f.getRelY(), f.getRelZ(), f.getYaw(), f.getPitch(), f.getLimbSwing(), f.getAnimationState());
         }
 
         EchoFrame prev = frames.get(0);
@@ -116,8 +116,9 @@ public final class GhostPlayerEntity {
         float z = lerp(prev.getRelZ(), next.getRelZ(), t);
         float yaw = lerpAngle(prev.getYaw(), next.getYaw(), t);
         float pitch = lerp(prev.getPitch(), next.getPitch(), t);
+        float limbSwing = lerp(prev.getLimbSwing(), next.getLimbSwing(), t);
 
-        return new Pose(x, y, z, yaw, pitch);
+        return new Pose(x, y, z, yaw, pitch, limbSwing, prev.getAnimationState());
     }
 
     public int getCurrentTick() {
@@ -148,4 +149,3 @@ public final class GhostPlayerEntity {
         return degrees;
     }
 }
-

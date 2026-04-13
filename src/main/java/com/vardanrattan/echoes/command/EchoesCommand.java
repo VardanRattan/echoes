@@ -91,7 +91,7 @@ public final class EchoesCommand {
         boolean display = mode.equals("display") || mode.equals("all");
 
         var world = player.level();
-        ServerLevel level = (ServerLevel) world;
+        ServerLevel level = world;
         var state = EchoWorldState.get(level);
         PlayerEchoData data = state.getOrCreatePlayerData(player.getUUID());
 
@@ -126,7 +126,7 @@ public final class EchoesCommand {
         }
 
         var world = player.level();
-        ServerLevel level = (ServerLevel) world;
+        ServerLevel level = world;
         var state = EchoWorldState.get(level);
 
         BlockPos center = player.blockPosition();

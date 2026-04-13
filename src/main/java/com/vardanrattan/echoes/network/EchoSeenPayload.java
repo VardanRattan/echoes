@@ -3,6 +3,7 @@ package com.vardanrattan.echoes.network;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
 import java.util.UUID;
 
@@ -15,10 +16,10 @@ import java.util.UUID;
 public record EchoSeenPayload(UUID echoId) implements CustomPacketPayload {
 
     public static final CustomPacketPayload.Type<EchoSeenPayload> ID =
-            CustomPacketPayload.createType("echoes:seen");
+            new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("echoes", "seen"));
 
     public static final StreamCodec<FriendlyByteBuf, EchoSeenPayload> CODEC =
-    StreamCodec.of(EchoSeenPayload::write, EchoSeenPayload::read);
+            StreamCodec.of(EchoSeenPayload::write, EchoSeenPayload::read);
 
     @Override
     public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {

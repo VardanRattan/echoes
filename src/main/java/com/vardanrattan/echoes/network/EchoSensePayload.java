@@ -22,7 +22,7 @@ public record EchoSensePayload(List<SenseEntry> nearbyEchoes) implements CustomP
             new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("echoes", "sense"));
 
     public static final StreamCodec<FriendlyByteBuf, EchoSensePayload> CODEC =
-    StreamCodec.of(EchoSensePayload::write, EchoSensePayload::read);
+            StreamCodec.of(EchoSensePayload::write, EchoSensePayload::read);
 
     @Override
     public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {

@@ -3,8 +3,6 @@ package com.vardanrattan.echoes.data;
 import com.vardanrattan.echoes.Echoes;
 import com.vardanrattan.echoes.config.EchoesConfig;
 import com.mojang.serialization.Codec;
-import com.mojang.serialization.DataResult;
-import com.mojang.serialization.DynamicOps;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -24,7 +22,6 @@ import net.minecraft.world.level.saveddata.SavedDataType;
 
 import java.util.*;
 import java.util.function.Consumer;
-import com.mojang.datafixers.util.Pair;
 
 /**
  * Per-world persistent state for all echoes and per-player echo data.
@@ -37,13 +34,15 @@ public final class EchoWorldState extends SavedData {
 
     public static final String NAME = Echoes.MOD_ID + "_world";
 
-    public static final SavedDataType<EchoWorldState> TYPE =
-        new SavedDataType<>(
-                Identifier.tryParse(Echoes.MOD_ID + ":echoes_world"),
-                EchoWorldState::new,
-                EchoWorldState.CODEC,
-                DataFixTypes.LEVEL
-        );
+    public static final Codec<EchoWorldState> CODEC = CompoundTag.CODEC.xmap(
+            EchoWorldState::fromTag,
+            state -> state.save(new CompoundTag()));
+
+    public static final SavedDataType<EchoWorldState> TYPE = new SavedDataType<>(
+            Identifier.tryParse(Echoes.MOD_ID + ":echoes_world"),
+            EchoWorldState::new,
+            EchoWorldState.CODEC,
+            DataFixTypes.LEVEL);
 
     private static final String TAG_CHUNK_ECHOS = "chunkEchoMap";
     private static final String TAG_PLAYER_DATA = "playerData";
@@ -101,10 +100,6 @@ public final class EchoWorldState extends SavedData {
     private final Map<ChunkPos, List<EchoRecord>> chunkEchoMap = new HashMap<>();
     private final Map<UUID, PlayerEchoData> playerData = new HashMap<>();
     private final Set<String> worldFirstsClaimed = new HashSet<>();
-    public static final Codec<EchoWorldState> CODEC = CompoundTag.CODEC.xmap(
-            EchoWorldState::fromTag,
-            state -> state.save(new CompoundTag())
-    );
     private long lastDecayCheckMs;
 
     public EchoWorldState() {
@@ -115,33 +110,33 @@ public final class EchoWorldState extends SavedData {
     }
 
     public static EchoWorldState fromTag(CompoundTag tag) {
-    EchoWorldState state = new EchoWorldState();
+        EchoWorldState state = new EchoWorldState();
 
-    int version = tag.getInt(TAG_DATA_VERSION).orElse(0);
+        int version = tag.getInt(TAG_DATA_VERSION).orElse(0);
 
-    Tag chunkEchoesTag = tag.get(TAG_CHUNK_ECHOS);
-    state.readChunkEchoes(chunkEchoesTag instanceof ListTag ? (ListTag) chunkEchoesTag : new ListTag());
+        Tag chunkEchoesTag = tag.get(TAG_CHUNK_ECHOS);
+        state.readChunkEchoes(chunkEchoesTag instanceof ListTag ? (ListTag) chunkEchoesTag : new ListTag());
 
-    Tag playerDataTag = tag.get(TAG_PLAYER_DATA);
-    state.readPlayerData(playerDataTag instanceof ListTag ? (ListTag) playerDataTag : new ListTag());
+        Tag playerDataTag = tag.get(TAG_PLAYER_DATA);
+        state.readPlayerData(playerDataTag instanceof ListTag ? (ListTag) playerDataTag : new ListTag());
 
-    state.lastDecayCheckMs = tag.getLong(TAG_LAST_DECAY_CHECK_MS).orElse(0L);
+        state.lastDecayCheckMs = tag.getLong(TAG_LAST_DECAY_CHECK_MS).orElse(0L);
 
-    Tag firstsTag = tag.get(TAG_WORLD_FIRSTS);
-    ListTag firsts = firstsTag instanceof ListTag ? (ListTag) firstsTag : new ListTag();
+        Tag firstsTag = tag.get(TAG_WORLD_FIRSTS);
+        ListTag firsts = firstsTag instanceof ListTag ? (ListTag) firstsTag : new ListTag();
 
-    for (int i = 0; i < firsts.size(); i++) {
-        Tag element = firsts.get(i);
-        if (element != null) {
-            String first = element.asString().orElse("");
-            if (!first.isEmpty()) {
-                state.worldFirstsClaimed.add(first);
+        for (int i = 0; i < firsts.size(); i++) {
+            Tag element = firsts.get(i);
+            if (element != null) {
+                String first = element.asString().orElse("");
+                if (!first.isEmpty()) {
+                    state.worldFirstsClaimed.add(first);
+                }
             }
         }
-    }
 
-    return state;
-}
+        return state;
+    }
 
     public CompoundTag save(CompoundTag tag) {
         tag.putInt(TAG_DATA_VERSION, CURRENT_DATA_VERSION);

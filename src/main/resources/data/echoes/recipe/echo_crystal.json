@@ -6,12 +6,8 @@
     "AAA"
   ],
   "key": {
-    "A": {
-      "item": "minecraft:amethyst_shard"
-    },
-    "G": {
-      "item": "minecraft:ghast_tear"
-    }
+    "A": "minecraft:amethyst_shard",
+    "G": "minecraft:ghast_tear"
   },
   "result": {
     "id": "echoes:echo_crystal",

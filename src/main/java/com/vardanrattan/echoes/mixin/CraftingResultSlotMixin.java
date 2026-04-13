@@ -17,7 +17,7 @@ public abstract class CraftingResultSlotMixin {
 
     @Shadow @Final private Player player;
 
-    @Inject(method = "onTakeItem", at = @At("HEAD"))
+    @Inject(method = "onTake", at = @At("HEAD"))
     private void echoes$onTakeCraftedItem(Player player, ItemStack stack, CallbackInfo ci) {
         if (this.player instanceof ServerPlayer serverPlayer) {
             MilestoneEchoHandler.onCraft(serverPlayer, stack);

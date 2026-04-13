@@ -52,7 +52,7 @@ public final class EchoNetworking {
         ServerPlayNetworking.registerGlobalReceiver(EchoSeenPayload.ID, (payload, context) -> {
             // Called on the server thread.
             var player = context.player();
-            ServerLevel world = (ServerLevel) player.level();
+            ServerLevel world = player.level();
 
             EchoWorldState state = EchoWorldState.get(world);
             UUID playerId = player.getUUID();

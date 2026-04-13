@@ -165,7 +165,7 @@ public final class RecordingSessionManager {
             return;
         }
 
-        ServerLevel serverWorld = (ServerLevel) player.level();
+        ServerLevel serverWorld = player.level();
 
         Deque<BufferedFrame> buffer = playerBuffers.remove(player.getUUID());
         worldTickCounters.remove(player.getUUID());
@@ -255,7 +255,7 @@ public final class RecordingSessionManager {
      * Captured frames will be pinned to the current position.
      */
     public void startManualRecording(ServerPlayer player) {
-        ServerLevel level = (ServerLevel) player.level();
+        ServerLevel level = player.level();
         var worldState = EchoWorldState.get(level);
         var playerData = worldState.getOrCreatePlayerData(player.getUUID());
         if (playerData.isOptedOut()) {
@@ -295,7 +295,7 @@ public final class RecordingSessionManager {
 
         if (echoFrames.isEmpty()) return;
 
-        ServerLevel world = (ServerLevel) player.level();
+        ServerLevel world = player.level();
         EchoWorldState state = EchoWorldState.get(world);
         var equipment = EquipmentSnapshot.capture(player);
 
