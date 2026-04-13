@@ -70,10 +70,6 @@ public final class EchoesCommand {
                                 .executes(ctx -> {
                                     CommandSourceStack source = ctx.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    if (player == null) {
-                                        source.sendFailure(Component.literal("Command can only be used by a player."));
-                                        return 0;
-                                    }
                                     if (!EchoesConfig.get().isAllowPlayerOptout()) {
                                         source.sendFailure(Component.literal("Player opt-out is disabled on this server."));
                                         return 0;

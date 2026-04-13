@@ -157,13 +157,7 @@ public final class EchoClientNetworking {
                 return;
 
             PoseStack poseStack = context.poseStack();
-            if (poseStack == null)
-                return;
-
             SubmitNodeCollector collector = context.submitNodeCollector();
-            if (collector == null)
-                return;
-
             float tickDelta = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
 
             for (ActiveGhost ag : activeGhosts.values()) {
@@ -209,17 +203,20 @@ public final class EchoClientNetworking {
             case SCAR, WORLD_FIRST -> 0.50f;
         };
 
-        client.level.playSound(null, ax, ay, az, primarySound, SoundSource.PLAYERS, primaryVol, 1.5f);
+        if (client.level != null) {
+            client.level.playSound(null, ax, ay, az, primarySound, SoundSource.PLAYERS, primaryVol, 1.5f);
 
-        if (payload.eventType() == com.vardanrattan.echoes.data.EchoEventType.DEATH) {
-            client.level.playSound(null, ax, ay, az,
-                    SoundEvents.PLAYER_DEATH, SoundSource.PLAYERS, 0.4f, 0.7f);
+            if (payload.eventType() == com.vardanrattan.echoes.data.EchoEventType.DEATH) {
+                client.level.playSound(null, ax, ay, az,
+                        SoundEvents.PLAYER_DEATH, SoundSource.PLAYERS, 0.4f, 0.7f);
+            }
         }
     }
 
     public static boolean tryShowGhostTooltip(Minecraft client) {
         if (activeGhosts.isEmpty() || client.player == null) return false;
 
+        if (client.player == null) return false;
         Vec3 start = client.player.getEyePosition();
         Vec3 dir = client.player.getLookAngle();
         double range = 10.0;
@@ -268,16 +265,18 @@ public final class EchoClientNetworking {
             displayName = "Anonymous";
         }
         
-        client.player.sendSystemMessage(Component.empty()
-                .append(Component.literal("Echo: ").withStyle(ChatFormatting.GOLD))
-                .append(Component.literal(displayName).withStyle(ChatFormatting.WHITE))
-                .append(Component.literal(" (").withStyle(ChatFormatting.GRAY))
-                .append(Component.literal(ag.eventType().name()).withStyle(ChatFormatting.AQUA))
-                .append(Component.literal(")").withStyle(ChatFormatting.GRAY)));
+        if (client.player != null) {
+            client.player.sendSystemMessage(Component.empty()
+                    .append(Component.literal("Echo: ").withStyle(ChatFormatting.GOLD))
+                    .append(Component.literal(displayName).withStyle(ChatFormatting.WHITE))
+                    .append(Component.literal(" (").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal(ag.eventType().name()).withStyle(ChatFormatting.AQUA))
+                    .append(Component.literal(")").withStyle(ChatFormatting.GRAY)));
 
-        client.player.sendSystemMessage(Component.empty()
-                .append(Component.literal("Recorded: ").withStyle(ChatFormatting.GOLD))
-                .append(Component.literal(relativeTime).withStyle(ChatFormatting.WHITE)));
+            client.player.sendSystemMessage(Component.empty()
+                    .append(Component.literal("Recorded: ").withStyle(ChatFormatting.GOLD))
+                    .append(Component.literal(relativeTime).withStyle(ChatFormatting.WHITE)));
+        }
     }
 
     private static String formatRelativeTime(long ageMs) {

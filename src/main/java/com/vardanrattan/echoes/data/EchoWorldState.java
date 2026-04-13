@@ -112,7 +112,7 @@ public final class EchoWorldState extends SavedData {
     public static EchoWorldState fromTag(CompoundTag tag) {
         EchoWorldState state = new EchoWorldState();
 
-        int version = tag.getInt(TAG_DATA_VERSION).orElse(0);
+        tag.getInt(TAG_DATA_VERSION).orElse(0);
 
         Tag chunkEchoesTag = tag.get(TAG_CHUNK_ECHOS);
         state.readChunkEchoes(chunkEchoesTag instanceof ListTag ? (ListTag) chunkEchoesTag : new ListTag());

@@ -70,7 +70,7 @@ public final class GhostPlayerRenderer {
         EchoesConfig cfg = EchoesConfig.get();
         float baseOpacity = switch (tier) {
             case WHISPER -> cfg.getWhisperOpacity();
-            case MARK    -> cfg.getMarkOpacity();
+            case MARK -> cfg.getMarkOpacity();
             case SCAR, WORLD_FIRST -> cfg.getScarOpacity();
         };
 
@@ -87,7 +87,7 @@ public final class GhostPlayerRenderer {
         poseStack.pushPose();
         poseStack.translate(wx - cam.x, wy - cam.y, wz - cam.z);
 
-        float yaw   = pose.yaw();
+        float yaw = pose.yaw();
         float pitch = pose.pitch();
 
         // Resolve the skin for this ghost's player UUID.
@@ -100,17 +100,16 @@ public final class GhostPlayerRenderer {
         AbstractClientPlayer standInPlayer = client.player;
         renderingGhost = true;
         try {
-            AvatarRenderer<AbstractClientPlayer> playerRenderer =
-                    erd.getPlayerRenderer(standInPlayer);
+            AvatarRenderer<AbstractClientPlayer> playerRenderer = erd.getPlayerRenderer(standInPlayer);
 
             AvatarRenderState state = playerRenderer.createRenderState();
             playerRenderer.extractRenderState(standInPlayer, state, tickDelta);
 
             // Feed ghost pose data into the render state
-            state.bodyRot            = yaw;
-            state.yRot               = yaw;
-            state.xRot               = pitch;
-            state.walkAnimationPos   = pose.limbSwing();
+            state.bodyRot = yaw;
+            state.yRot = yaw;
+            state.xRot = pitch;
+            state.walkAnimationPos = pose.limbSwing();
             state.walkAnimationSpeed = 0.8f;
 
             // Assign the resolved skin so the correct texture is used
@@ -152,7 +151,7 @@ public final class GhostPlayerRenderer {
         if (mc == null || mc.particleEngine == null)
             return;
 
-        float alpha     = ghost.getAlpha();
+        float alpha = ghost.getAlpha();
         float intensity = Mth.clamp(alpha, 0.05f, 1.0f);
 
         switch (tier) {
@@ -163,13 +162,13 @@ public final class GhostPlayerRenderer {
             }
             case MARK -> {
                 if (world.getRandom().nextInt(7) < Math.round(intensity * 3)) {
-                    createParticle(world, ParticleTypes.SOUL,    wx, wy, wz, orbit(world), orbit(world), orbit(world));
-                    createParticle(world, ParticleTypes.ENCHANT, wx, wy, wz, orbit(world), 0.04,         orbit(world));
+                    createParticle(world, ParticleTypes.SOUL, wx, wy, wz, orbit(world), orbit(world), orbit(world));
+                    createParticle(world, ParticleTypes.ENCHANT, wx, wy, wz, orbit(world), 0.04, orbit(world));
                 }
             }
             case SCAR, WORLD_FIRST -> {
                 if (world.getRandom().nextInt(5) < Math.round(intensity * 4)) {
-                    createParticle(world, ParticleTypes.SOUL,    wx, wy, wz, rand(world), 0.05, rand(world));
+                    createParticle(world, ParticleTypes.SOUL, wx, wy, wz, rand(world), 0.05, rand(world));
                     createParticle(world, ParticleTypes.END_ROD, wx, wy, wz, rand(world), 0.06, rand(world));
                 }
             }
