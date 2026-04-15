@@ -102,33 +102,28 @@ public final class GhostPlayerRenderer {
         try {
             AvatarRenderer<AbstractClientPlayer> playerRenderer = erd.getPlayerRenderer(standInPlayer);
 
+            // Option 1: Extract real player state, then mutate with ghost data.
             AvatarRenderState state = playerRenderer.createRenderState();
             playerRenderer.extractRenderState(standInPlayer, state, tickDelta);
 
-            // Feed ghost pose data into the render state
+            // Overwrite with ghost pose data
             state.bodyRot = yaw;
             state.yRot = yaw;
             state.xRot = pitch;
             state.walkAnimationPos = pose.limbSwing();
             state.walkAnimationSpeed = 0.8f;
 
-            // Assign the resolved skin so the correct texture is used
+            // Assign the resolved skin
             state.skin = skin;
 
-            // For WHISPER tier ghosts, mark as invisible-to-player so the
-            // model renders with the engine's built-in translucency pass.
-            // For higher tiers we render fully and rely on particle density
-            // to communicate the ghost's fade state.
+            // WHISPER tier translucency
             state.isInvisibleToPlayer = (tier == EchoTier.WHISPER && effectiveAlpha < 0.5f);
 
-            // submit() replaces the old render(state, poseStack, consumers, light) call.
-            // CameraRenderState is obtained from the level renderer context; we pass
-            // null here and let the renderer fall back to its defaults — adjust if
-            // your call site has access to a CameraRenderState instance.
+            // In 26.1, we must use submit(). We use the collector provided by the context.
             playerRenderer.submit(state, poseStack, submitCollector, null);
 
         } catch (Exception e) {
-            // Fail gracefully — ghost simply doesn't render this frame
+            // Fail gracefully
         } finally {
             renderingGhost = false;
         }
