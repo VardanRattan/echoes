@@ -49,7 +49,14 @@ The implementation is organized as:
 
 ## Profiling & Performance Verification
 
-Echoes is designed to be **safe for SMPs**, but you should still profile it on your own setup:
+Echoes is aggressively optimized to be **safe for high-population SMPs**, and includes several built-in engine safeguards:
+
+- **Network Downsampling**: Echo playback payloads are automatically downsampled on the server (by 75%), heavily reducing network bandwidth.
+- **Client-Side Interpolation**: Downsampled frames are reconstructed on the client using buttery-smooth Catmull-Rom spline interpolation for position and Slerp for rotation, ensuring ghost animations look perfect even on slow connections.
+- **Distance-Based Culling**: Ghost rendering is completely culled if the player is > 64 blocks away.
+- **Particle Throttling**: Ghost particle emissions scale dynamically with distance (dropping to 25% beyond 16 blocks, and 0% beyond 32 blocks) to preserve client FPS in memory-dense chunks.
+
+You should still profile it on your own setup:
 
 - **Use a server profiler** (e.g. [Spark](https://spark.lucko.me/)) alongside Echoes on a dev server.
 - **Exercise worst‑case behavior**:
