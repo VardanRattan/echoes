@@ -87,6 +87,8 @@ public final class PlaybackTriggerService {
             UUID resolvedUuid = com.vardanrattan.echoes.network.EchoPrivacy.resolvePlayerUuid(best);
             String resolvedName = com.vardanrattan.echoes.network.EchoPrivacy.resolvePlayerName(best);
 
+            List<com.vardanrattan.echoes.data.EchoFrame> downsampled = downsampleFrames(best.getFrames(), 4);
+
             EchoPlaybackPayload payload = new EchoPlaybackPayload(
                     best.getUUID(),
                     best.getDimension(),
@@ -97,7 +99,7 @@ public final class PlaybackTriggerService {
                     resolvedName == null ? "" : resolvedName,
                     best.getRealTimestamp(),
                     best.getEquipment(),
-                    best.getFrames()
+                    downsampled
             );
 
             ServerPlayNetworking.send(player, payload);
@@ -120,6 +122,19 @@ public final class PlaybackTriggerService {
     }
 
     private record ActivePlayback(UUID echoUuid, long startedAtTick) {
+    }
+
+    private List<com.vardanrattan.echoes.data.EchoFrame> downsampleFrames(List<com.vardanrattan.echoes.data.EchoFrame> original, int factor) {
+        if (original == null || original.isEmpty()) return original;
+        List<com.vardanrattan.echoes.data.EchoFrame> downsampled = new java.util.ArrayList<>(original.size() / factor + 1);
+        for (int i = 0; i < original.size(); i += factor) {
+            downsampled.add(original.get(i));
+        }
+        // Always include the last frame to ensure the animation finishes correctly
+        if ((original.size() - 1) % factor != 0) {
+            downsampled.add(original.get(original.size() - 1));
+        }
+        return downsampled;
     }
 }
 

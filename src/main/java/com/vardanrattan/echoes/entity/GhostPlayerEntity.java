@@ -96,29 +96,36 @@ public final class GhostPlayerEntity {
             return new Pose(f.getRelX(), f.getRelY(), f.getRelZ(), f.getYaw(), f.getPitch(), f.getLimbSwing(), f.getAnimationState());
         }
 
-        EchoFrame prev = frames.get(0);
-        EchoFrame next = frames.get(frames.size() - 1);
+        int p1Idx = 0;
+        int p2Idx = frames.size() - 1;
 
         for (int i = 1; i < frames.size(); i++) {
-            EchoFrame f = frames.get(i);
-            if (f.getTickOffset() >= renderTick) {
-                next = f;
-                prev = frames.get(i - 1);
+            if (frames.get(i).getTickOffset() >= renderTick) {
+                p2Idx = i;
+                p1Idx = i - 1;
                 break;
             }
         }
 
-        int dt = Math.max(1, next.getTickOffset() - prev.getTickOffset());
-        float t = Math.clamp((renderTick - prev.getTickOffset()) / (float) dt, 0.0f, 1.0f);
+        int p0Idx = Math.max(0, p1Idx - 1);
+        int p3Idx = Math.min(frames.size() - 1, p2Idx + 1);
 
-        float x = lerp(prev.getRelX(), next.getRelX(), t);
-        float y = lerp(prev.getRelY(), next.getRelY(), t);
-        float z = lerp(prev.getRelZ(), next.getRelZ(), t);
-        float yaw = lerpAngle(prev.getYaw(), next.getYaw(), t);
-        float pitch = lerp(prev.getPitch(), next.getPitch(), t);
-        float limbSwing = lerp(prev.getLimbSwing(), next.getLimbSwing(), t);
+        EchoFrame p0 = frames.get(p0Idx);
+        EchoFrame p1 = frames.get(p1Idx);
+        EchoFrame p2 = frames.get(p2Idx);
+        EchoFrame p3 = frames.get(p3Idx);
 
-        return new Pose(x, y, z, yaw, pitch, limbSwing, prev.getAnimationState());
+        int dt = Math.max(1, p2.getTickOffset() - p1.getTickOffset());
+        float t = Math.clamp((renderTick - p1.getTickOffset()) / (float) dt, 0.0f, 1.0f);
+
+        float x = catmullRom(p0.getRelX(), p1.getRelX(), p2.getRelX(), p3.getRelX(), t);
+        float y = catmullRom(p0.getRelY(), p1.getRelY(), p2.getRelY(), p3.getRelY(), t);
+        float z = catmullRom(p0.getRelZ(), p1.getRelZ(), p2.getRelZ(), p3.getRelZ(), t);
+        float yaw = slerpAngle(p0.getYaw(), p1.getYaw(), p2.getYaw(), p3.getYaw(), t);
+        float pitch = catmullRom(p0.getPitch(), p1.getPitch(), p2.getPitch(), p3.getPitch(), t);
+        float limbSwing = lerp(p1.getLimbSwing(), p2.getLimbSwing(), t);
+
+        return new Pose(x, y, z, yaw, pitch, limbSwing, p1.getAnimationState());
     }
 
     public int getCurrentTick() {
@@ -133,9 +140,23 @@ public final class GhostPlayerEntity {
         return a + (b - a) * t;
     }
 
-    private static float lerpAngle(float a, float b, float t) {
-        float delta = wrapDegrees(b - a);
-        return a + delta * t;
+    private static float catmullRom(float p0, float p1, float p2, float p3, float t) {
+        float t2 = t * t;
+        float t3 = t2 * t;
+        return 0.5f * ((2.0f * p1) +
+                (-p0 + p2) * t +
+                (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
+                (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3);
+    }
+
+    private static float slerpAngle(float p0, float p1, float p2, float p3, float t) {
+        // Catmull-Rom for angles requires wrapping the differences relative to p1
+        float dp0 = wrapDegrees(p0 - p1);
+        float dp1 = 0; // p1 - p1
+        float dp2 = wrapDegrees(p2 - p1);
+        float dp3 = wrapDegrees(p3 - p1);
+        float result = catmullRom(dp0, dp1, dp2, dp3, t);
+        return wrapDegrees(p1 + result);
     }
 
     private static float wrapDegrees(float degrees) {

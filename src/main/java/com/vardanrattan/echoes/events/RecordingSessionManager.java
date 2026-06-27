@@ -312,6 +312,9 @@ public final class RecordingSessionManager {
         EchoService.onEchoCreated(record);
         state.setDirty();
 
+        player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("item.echoes.echo_crystal.manual.finished"), true);
+        player.level().playSound(null, player.blockPosition(), net.minecraft.sounds.SoundEvents.AMETHYST_BLOCK_RESONATE, net.minecraft.sounds.SoundSource.PLAYERS, 0.8f, 1.2f);
+
         Echoes.LOGGER.info("Manual echo created for player={} at {}", player.getName().getString(), session.anchor());
     }
 }

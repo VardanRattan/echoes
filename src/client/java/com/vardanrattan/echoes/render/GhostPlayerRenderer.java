@@ -67,6 +67,19 @@ public final class GhostPlayerRenderer {
         if (world == null || client.player == null)
             return;
 
+        GhostPlayerEntity.Pose pose = ghost.getCurrentPose();
+        double wx = anchor.getX() + 0.5 + pose.x();
+        double wy = anchor.getY() + pose.y();
+        double wz = anchor.getZ() + 0.5 + pose.z();
+
+        Vec3 cam = client.gameRenderer.getMainCamera().position();
+        double distSq = cam.distanceToSqr(wx, wy, wz);
+
+        // OPTIMIZATION: Distance Culling (don't render models if > 64 blocks away)
+        if (distSq > 4096) {
+            return;
+        }
+
         EchoesConfig cfg = EchoesConfig.get();
         float baseOpacity = switch (tier) {
             case WHISPER -> cfg.getWhisperOpacity();
@@ -75,24 +88,15 @@ public final class GhostPlayerRenderer {
         };
 
         float effectiveAlpha = Mth.clamp(alpha * baseOpacity, 0.0f, 1.0f);
-        GhostPlayerEntity.Pose pose = ghost.getCurrentPose();
-
-        double wx = anchor.getX() + 0.5 + pose.x();
-        double wy = anchor.getY() + pose.y();
-        double wz = anchor.getZ() + 0.5 + pose.z();
 
         EntityRenderDispatcher erd = client.getEntityRenderDispatcher();
-        Vec3 cam = client.gameRenderer.getMainCamera().position();
-
+        
         poseStack.pushPose();
         poseStack.translate(wx - cam.x, wy - cam.y, wz - cam.z);
 
         float yaw = pose.yaw();
         float pitch = pose.pitch();
 
-        // Resolve the skin for this ghost's player UUID.
-        // DefaultPlayerSkin.get(UUID) returns a PlayerSkin record directly.
-        // The skin is used to populate AvatarRenderState.skin below.
         PlayerSkin skin = (playerUuid != null)
                 ? DefaultPlayerSkin.get(playerUuid)
                 : DefaultPlayerSkin.getDefaultSkin();
@@ -102,35 +106,83 @@ public final class GhostPlayerRenderer {
         try {
             AvatarRenderer<AbstractClientPlayer> playerRenderer = erd.getPlayerRenderer(standInPlayer);
 
-            // Option 1: Extract real player state, then mutate with ghost data.
-            AvatarRenderState state = playerRenderer.createRenderState();
-            playerRenderer.extractRenderState(standInPlayer, state, tickDelta);
+            // Create a fresh state instead of extracting from a live entity
+            AvatarRenderState state = new AvatarRenderState();
 
-            // Overwrite with ghost pose data
+            // Apply ghost pose data
             state.bodyRot = yaw;
             state.yRot = yaw;
             state.xRot = pitch;
             state.walkAnimationPos = pose.limbSwing();
             state.walkAnimationSpeed = 0.8f;
-
-            // Assign the resolved skin
             state.skin = skin;
 
-            // WHISPER tier translucency
-            state.isInvisibleToPlayer = (tier == EchoTier.WHISPER && effectiveAlpha < 0.5f);
+            // Fetch the model from the renderer
+            var model = playerRenderer.getModel();
+            model.setupAnim(state);
 
-            // In 26.1, we must use submit(). We use the collector provided by the context.
-            playerRenderer.submit(state, poseStack, submitCollector, null);
+            // Safely get the texture identifier regardless of mappings (record method vs field)
+            net.minecraft.resources.Identifier tex = null;
+            try {
+                tex = (net.minecraft.resources.Identifier) state.skin.getClass().getMethod("texture").invoke(state.skin);
+            } catch (Exception e) {
+                try {
+                    tex = (net.minecraft.resources.Identifier) state.skin.getClass().getField("texture").get(state.skin);
+                } catch (Exception e2) {
+                    tex = net.minecraft.resources.Identifier.tryParse("minecraft:textures/entity/steve.png");
+                }
+            }
+
+            // Safely get the translucent RenderType regardless of mappings
+            RenderType renderType = null;
+            try {
+                for (java.lang.reflect.Method m : RenderType.class.getMethods()) {
+                    if (m.getName().toLowerCase().contains("translucent") && m.getParameterCount() == 1 && m.getParameterTypes()[0] == net.minecraft.resources.Identifier.class) {
+                        renderType = (RenderType) m.invoke(null, tex);
+                        break;
+                    }
+                }
+                if (renderType == null) {
+                    for (java.lang.reflect.Method m : RenderType.class.getMethods()) {
+                        if (m.getName().toLowerCase().contains("translucent") && m.getParameterCount() == 2 && m.getParameterTypes()[0] == net.minecraft.resources.Identifier.class) {
+                            renderType = (RenderType) m.invoke(null, tex, true);
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            com.mojang.blaze3d.vertex.VertexConsumer buffer = client.renderBuffers().bufferSource().getBuffer(renderType);
+
+            // TIER SPECIFIC COLORING
+            int r, g, b;
+            if (tier == EchoTier.WORLD_FIRST) {
+                r = 255; g = 230; b = 150; // Ethereal Gold
+            } else {
+                r = 200; g = 220; b = 255; // Pale Blue
+            }
+
+            int a = (int) (effectiveAlpha * 255);
+            int color = (a << 24) | (r << 16) | (g << 8) | b;
+
+            // PULSING GLOW: Oscillate overlay brightness based on tick
+            float pulse = (Mth.sin((ghost.getCurrentTick() + tickDelta) * 0.1f) + 1.0f) * 0.5f;
+            int light = (int) (15728880 * (0.8f + (pulse * 0.2f))); // Very slight pulse in brightness
+            light = Mth.clamp(light, 0, 15728880);
+
+            model.renderToBuffer(poseStack, buffer, light, net.minecraft.client.renderer.entity.LivingEntityRenderer.getOverlayCoords(state, 0.0f), color);
 
         } catch (Exception e) {
-            // Fail gracefully
+            com.vardanrattan.echoes.Echoes.LOGGER.error("Ghost render failed", e);
         } finally {
             renderingGhost = false;
         }
 
         poseStack.popPose();
 
-        spawnGhostParticles(world, ghost, tier, wx, wy, wz);
+        spawnGhostParticles(world, ghost, tier, wx, wy, wz, distSq);
     }
 
     // -------------------------------------------------------------------------
@@ -141,13 +193,19 @@ public final class GhostPlayerRenderer {
             ClientLevel world,
             GhostPlayerEntity ghost,
             EchoTier tier,
-            double wx, double wy, double wz) {
+            double wx, double wy, double wz,
+            double distSq) {
+            
+        // OPTIMIZATION: Distance-based particle throttling
+        if (distSq > 1024) return; // No particles beyond 32 blocks
+        float distanceMultiplier = (distSq > 256) ? 0.25f : 1.0f; // 25% particles beyond 16 blocks
+
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.particleEngine == null)
             return;
 
         float alpha = ghost.getAlpha();
-        float intensity = Mth.clamp(alpha, 0.05f, 1.0f);
+        float intensity = Mth.clamp(alpha, 0.05f, 1.0f) * distanceMultiplier;
 
         switch (tier) {
             case WHISPER -> {
