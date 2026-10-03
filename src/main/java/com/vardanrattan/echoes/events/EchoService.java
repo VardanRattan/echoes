@@ -47,11 +47,23 @@ public final class EchoService {
             List<EchoFrame> frames,
             EquipmentSnapshot equipment
     ) {
+        return createEchoFromFrames(world, player, eventType, null, anchorPos, frames, equipment);
+    }
+
+    public static EchoRecord createEchoFromFrames(
+            ServerLevel world,
+            ServerPlayer player,
+            EchoEventType eventType,
+            String subKey,
+            BlockPos anchorPos,
+            List<EchoFrame> frames,
+            EquipmentSnapshot equipment
+    ) {
         EchoTier tier = tierFor(eventType);
         
         // E6: World first check
         if (isWorldFirstEligible(eventType, world)) {
-            String worldFirstKey = "world_first:" + eventType.name();
+            String worldFirstKey = "world_first:" + eventType.name() + (subKey != null ? ":" + subKey : "");
             if (EchoWorldState.get(world).claimWorldFirst(worldFirstKey)) {
                 tier = EchoTier.WORLD_FIRST;
             }
@@ -79,6 +91,7 @@ public final class EchoService {
     private static boolean isWorldFirstEligible(EchoEventType type, ServerLevel world) {
         if (type == EchoEventType.BOSS_KILL) return true;
         if (type == EchoEventType.DIMENSION_ENTER && world.dimension() == Level.END) return true;
+        if (type == EchoEventType.FIRST_ELYTRA_FLIGHT) return true;
         return false;
     }
 
@@ -90,25 +103,24 @@ public final class EchoService {
     public static EchoTier tierFor(EchoEventType type) {
         return switch (type) {
             // Tier 1 — Whispers
-            case BIOME_DISCOVERY, JOURNEY_LONG, DIMENSION_ENTER -> EchoTier.WHISPER;
+            case BIOME_DISCOVERY, JOURNEY_LONG, FIRST_SLEEP, FIRST_TRADE -> EchoTier.WHISPER;
 
             // Tier 2 — Marks
-            case DEATH, STRUCTURE_DISCOVERY, MAJOR_CRAFT, TAMING -> EchoTier.MARK;
+            case DEATH, STRUCTURE_DISCOVERY, DIMENSION_ENTER, MAJOR_CRAFT, TAMING -> EchoTier.MARK;
 
             // Tier 3 — Scars / special
-            case BOSS_KILL, JOURNEY_MARATHON, WORLD_FIRST, MANUAL_CRYSTAL -> EchoTier.SCAR;
+            case BOSS_KILL, JOURNEY_MARATHON, WORLD_FIRST, MANUAL_CRYSTAL, FIRST_ELYTRA_FLIGHT, CATASTROPHIC_DEATH -> EchoTier.SCAR;
         };
     }
 
     /**
      * Default maximum recording length in ticks for an event type.
-     * This is mostly for future non-prebuffered recordings.
      */
     public static int maxRecordingTicks(EchoEventType type) {
         return switch (type) {
             case DEATH, STRUCTURE_DISCOVERY, DIMENSION_ENTER, MAJOR_CRAFT, TAMING -> 20 * 5; // ~5s
-            case BIOME_DISCOVERY, JOURNEY_LONG, MANUAL_CRYSTAL -> 20 * 3; // ~3s
-            case BOSS_KILL, JOURNEY_MARATHON, WORLD_FIRST -> 20 * 8; // ~8s
+            case BIOME_DISCOVERY, JOURNEY_LONG, FIRST_SLEEP, FIRST_TRADE -> 20 * 3; // ~3s
+            case BOSS_KILL, JOURNEY_MARATHON, WORLD_FIRST, MANUAL_CRYSTAL, FIRST_ELYTRA_FLIGHT, CATASTROPHIC_DEATH -> 20 * 8; // ~8s
         };
     }
 

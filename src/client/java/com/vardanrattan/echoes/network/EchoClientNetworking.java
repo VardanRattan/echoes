@@ -8,10 +8,13 @@ import com.vardanrattan.echoes.render.GhostPlayerRenderer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.particles.ColorParticleOption;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.network.chat.Component;
@@ -63,23 +66,24 @@ public final class EchoClientNetworking {
                     payload.echoId(), payload.frames().size(), payload.tier(), payload.eventType());
 
             if (payload.frames() != null && !payload.frames().isEmpty()) {
-                GhostPlayerEntity ghost = new GhostPlayerEntity(
-                        payload.frames(),
-                        20, // fade-in ticks (~1s)
-                        30 // fade-out ticks (~1.5s)
-                );
-                activeGhosts.put(payload.echoId(), new ActiveGhost(
-                        ghost,
-                        payload.tier(),
-                        payload.eventType(),
-                        payload.anchorPos(),
-                        payload.equipment(),
-                        payload.playerUuid(),
-                        payload.playerName(),
-                        payload.realTimestamp()));
+                spawnLocalGhost(payload.echoId(), payload.frames(), payload.tier(), payload.eventType(),
+                        payload.anchorPos(), payload.equipment(), payload.playerUuid(), payload.playerName(),
+                        payload.realTimestamp());
 
                 // C1 — play tier/event appropriate vanilla sound on echo start.
                 playEchoStartSound(payload, context.client());
+
+                // World First flash particle burst on spawn
+                if (payload.tier() == EchoTier.WORLD_FIRST && context.client().level != null) {
+                    BlockPos p = payload.anchorPos();
+                    context.client().particleEngine.createParticle(
+                            ColorParticleOption.create(ParticleTypes.FLASH, 0xFFFFE696),
+                            p.getX() + 0.5,
+                            p.getY() + 1.0,
+                            p.getZ() + 0.5,
+                            0.0, 0.0, 0.0
+                    );
+                }
             }
         });
 
@@ -142,7 +146,11 @@ public final class EchoClientNetworking {
                     Map.Entry<UUID, ActiveGhost> entry = git.next();
                     GhostPlayerEntity ghost = entry.getValue().ghost();
                     ghost.tick();
+                    GhostPlayerRenderer.spawnGhostParticles(world, ghost, entry.getValue().tier(), entry.getValue().anchor());
                     if (ghost.isFinished()) {
+                        BlockPos anchor = entry.getValue().anchor();
+                        world.playSound(null, anchor.getX() + 0.5, anchor.getY() + 1.0, anchor.getZ() + 0.5,
+                                SoundEvents.GLASS_BREAK, SoundSource.PLAYERS, 0.10f, 2.0f);
                         git.remove();
                     }
                 }
@@ -150,14 +158,19 @@ public final class EchoClientNetworking {
         });
 
         // -----------------------------------------------------------------------
-        // A1 + A2: LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES — all draw calls happen here.
+        // A1 + A2: LevelRenderEvents.COLLECT_SUBMITS — all model/entity draw calls happen here.
         // -----------------------------------------------------------------------
-        LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(context -> {
+        LevelRenderEvents.COLLECT_SUBMITS.register(context -> {
             if (activeGhosts.isEmpty())
                 return;
 
             PoseStack poseStack = context.poseStack();
+            if (poseStack == null) {
+                poseStack = new PoseStack();
+            }
             SubmitNodeCollector collector = context.submitNodeCollector();
+            var levelState = context.levelState();
+            var cameraState = (levelState != null) ? levelState.cameraRenderState : null;
             float tickDelta = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
 
             for (ActiveGhost ag : activeGhosts.values()) {
@@ -173,6 +186,7 @@ public final class EchoClientNetworking {
                 GhostPlayerRenderer.renderGhost(
                         poseStack,
                         collector,
+                        cameraState,
                         tickDelta,
                         ag.ghost(),
                         ag.tier(),
@@ -180,6 +194,20 @@ public final class EchoClientNetworking {
                         ag.equipment(),
                         resolvedUuid);
             }
+        });
+
+        // -----------------------------------------------------------------------
+        // F5: Inspect active ghost tooltip on right-click with Echo Crystal
+        // -----------------------------------------------------------------------
+        UseItemCallback.EVENT.register((player, world, hand) -> {
+            if (world.isClientSide() && player.getItemInHand(hand).getItem() instanceof com.vardanrattan.echoes.item.EchoCrystalItem) {
+                if (!player.isShiftKeyDown()) {
+                    if (tryShowGhostTooltip(Minecraft.getInstance())) {
+                        return InteractionResult.SUCCESS;
+                    }
+                }
+            }
+            return InteractionResult.PASS;
         });
     }
 
@@ -288,6 +316,25 @@ public final class EchoClientNetworking {
         if (hours < 24) return hours + "h ago";
         long days = TimeUnit.MILLISECONDS.toDays(ageMs);
         return days + "d ago";
+    }
+
+    public static void spawnLocalGhost(
+            UUID echoId,
+            java.util.List<com.vardanrattan.echoes.data.EchoFrame> frames,
+            EchoTier tier,
+            com.vardanrattan.echoes.data.EchoEventType eventType,
+            BlockPos anchorPos,
+            EquipmentSnapshot equipment,
+            UUID playerUuid,
+            String playerName,
+            long realTimestamp) {
+        GhostPlayerEntity ghost = new GhostPlayerEntity(frames, 20, 30);
+        activeGhosts.put(echoId, new ActiveGhost(
+                ghost, tier, eventType, anchorPos, equipment, playerUuid, playerName, realTimestamp));
+    }
+
+    public static void clearActiveGhosts() {
+        activeGhosts.clear();
     }
 
     private static int estimateDurationTicks(EchoPlaybackPayload payload) {

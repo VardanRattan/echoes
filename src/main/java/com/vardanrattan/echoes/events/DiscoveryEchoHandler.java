@@ -23,9 +23,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Handles biome discovery and dimension enter echo triggers.
- *
- * Structure discovery and other echoes will be layered in here later.
+ * Handles biome discovery, dimension enter, and structure discovery echo triggers.
  */
 public final class DiscoveryEchoHandler {
 
@@ -92,6 +90,8 @@ public final class DiscoveryEchoHandler {
 
     private static void handleBiomeDiscovery(ServerLevel world, ServerPlayer player, EchoWorldState state,
             PlayerEchoData data) {
+        if (data.isOptedOut()) return;
+
         Holder<Biome> biomeEntry = world.getBiomeManager().getBiome(player.blockPosition());
         ResourceKey<Biome> biomeKey = biomeEntry.unwrapKey().orElse(null);
         if (biomeKey == null)
@@ -101,8 +101,8 @@ public final class DiscoveryEchoHandler {
             data.addDiscoveredBiome(biomeKey);
             state.setDirty();
 
-            // Create a tiny echo where the player is standing.
-            List<EchoFrame> frames = FrameSampler.singleFrame(world, player);
+            // Create animated echo from rolling buffer
+            List<EchoFrame> frames = FrameSampler.sampleFrames(world, player, player.blockPosition(), 30);
             if (!frames.isEmpty()) {
                 var equipment = EquipmentSnapshot.capture(player);
                 var record = EchoService.createEchoFromFrames(
@@ -120,12 +120,14 @@ public final class DiscoveryEchoHandler {
 
     private static void handleDimensionVisit(ServerLevel world, ServerPlayer player, EchoWorldState state,
             PlayerEchoData data) {
+        if (data.isOptedOut()) return;
+
         var dimKey = world.dimension();
         if (!data.getVisitedDimensions().contains(dimKey)) {
             data.addVisitedDimension(dimKey);
             state.setDirty();
 
-            List<EchoFrame> frames = FrameSampler.singleFrame(world, player);
+            List<EchoFrame> frames = FrameSampler.sampleFrames(world, player, player.blockPosition(), 50);
             if (!frames.isEmpty()) {
                 var equipment = EquipmentSnapshot.capture(player);
                 var record = EchoService.createEchoFromFrames(
@@ -143,6 +145,8 @@ public final class DiscoveryEchoHandler {
 
     private static void handleStructureDiscovery(ServerLevel world, ServerPlayer player, EchoWorldState state,
             PlayerEchoData data) {
+        if (data.isOptedOut()) return;
+
         BlockPos pos = player.blockPosition();
         var structureStart = world.structureManager().getStructureWithPieceAt(pos, entry -> true);
 
@@ -155,12 +159,11 @@ public final class DiscoveryEchoHandler {
 
             String idStr = structureId.toString();
             if (MAJOR_STRUCTURES.contains(idStr)) {
-                VisitedStructure vs = new VisitedStructure(structureId, pos);
-                if (!data.getDiscoveredStructures().contains(vs)) {
-                    data.addDiscoveredStructure(vs);
+                if (!data.hasDiscoveredStructureNear(structureId, pos, 256.0)) {
+                    data.addDiscoveredStructure(new VisitedStructure(structureId, pos));
                     state.setDirty();
 
-                    List<EchoFrame> frames = FrameSampler.singleFrame(world, player);
+                    List<EchoFrame> frames = FrameSampler.sampleFrames(world, player, pos, 50);
                     if (!frames.isEmpty()) {
                         var equipment = EquipmentSnapshot.capture(player);
                         var record = EchoService.createEchoFromFrames(

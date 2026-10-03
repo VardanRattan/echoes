@@ -59,6 +59,8 @@ public final class EchoesCommand {
                             ctx.getSource().sendSuccess(() -> Component.literal("Debug logging: " + (current ? "ENABLED" : "DISABLED")), true);
                             return 1;
                         }))
+                .then(Commands.literal("worldfirsts")
+                        .executes(ctx -> listWorldFirsts(ctx.getSource())))
                 .then(Commands.literal("optout")
                         .then(argument("mode", StringArgumentType.word())
                                 .suggests((ctx, builder) -> {
@@ -79,6 +81,28 @@ public final class EchoesCommand {
                                     applyOptout(source, player, mode);
                                     return 1;
                                 }))));
+    }
+
+    private static int listWorldFirsts(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        if (level == null) {
+            source.sendFailure(Component.literal("No level context available."));
+            return 0;
+        }
+
+        var state = EchoWorldState.get(level);
+        var firsts = state.getWorldFirstsClaimed();
+
+        if (firsts.isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("commands.echoes.worldfirsts.none"), false);
+            return 0;
+        }
+
+        source.sendSuccess(() -> Component.translatable("commands.echoes.worldfirsts.header"), false);
+        for (String first : firsts) {
+            source.sendSuccess(() -> Component.literal(" • " + first), false);
+        }
+        return firsts.size();
     }
 
     private static void applyOptout(CommandSourceStack source, ServerPlayer player, String modeRaw) {

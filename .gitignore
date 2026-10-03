@@ -38,3 +38,9 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+logs/
+*.class
+*.txt
+/showcase.png
+/test_window.png
+

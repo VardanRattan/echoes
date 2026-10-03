@@ -38,7 +38,7 @@ public final class MilestoneEchoHandler {
         if (!EchoesConfig.get().isEnabled() || !EchoesConfig.get().isTamingEnabled()) {
             return;
         }
-        emitMilestoneEcho(player, pos, EchoEventType.TAMING, "milestone:taming");
+        emitMilestoneEcho(player, pos, EchoEventType.TAMING, "milestone:taming", 40);
     }
 
     public static void onCraft(ServerPlayer player, ItemStack stack) {
@@ -49,20 +49,51 @@ public final class MilestoneEchoHandler {
         Item item = stack.getItem();
         if (MILESTONE_ITEMS.contains(item)) {
             String milestoneKey = "milestone:craft:" + item.toString();
-            emitMilestoneEcho(player, player.blockPosition(), EchoEventType.MAJOR_CRAFT, milestoneKey);
+            emitMilestoneEcho(player, player.blockPosition(), EchoEventType.MAJOR_CRAFT, milestoneKey, 50);
         }
     }
 
-    private static void emitMilestoneEcho(ServerPlayer player, BlockPos pos, EchoEventType type, String milestoneKey) {
+    public static void onSleep(ServerPlayer player, BlockPos pos) {
+        if (!EchoesConfig.get().isEnabled()) {
+            return;
+        }
         ServerLevel world = player.level();
         EchoWorldState state = EchoWorldState.get(world);
         PlayerEchoData data = state.getOrCreatePlayerData(player.getUUID());
+        if (!data.hasSlept()) {
+            data.setHasSlept(true);
+            state.setDirty();
+            emitMilestoneEcho(player, pos, EchoEventType.FIRST_SLEEP, "milestone:first_sleep", 30);
+        }
+    }
+
+    public static void onTrade(ServerPlayer player, BlockPos pos) {
+        if (!EchoesConfig.get().isEnabled()) {
+            return;
+        }
+        ServerLevel world = player.level();
+        EchoWorldState state = EchoWorldState.get(world);
+        PlayerEchoData data = state.getOrCreatePlayerData(player.getUUID());
+        if (!data.hasTraded()) {
+            data.setHasTraded(true);
+            state.setDirty();
+            emitMilestoneEcho(player, pos, EchoEventType.FIRST_TRADE, "milestone:first_trade", 30);
+        }
+    }
+
+    private static void emitMilestoneEcho(ServerPlayer player, BlockPos pos, EchoEventType type, String milestoneKey, int frameCount) {
+        ServerLevel world = player.level();
+        EchoWorldState state = EchoWorldState.get(world);
+        PlayerEchoData data = state.getOrCreatePlayerData(player.getUUID());
+        if (data.isOptedOut()) {
+            return;
+        }
 
         if (!data.getCraftedMilestones().contains(milestoneKey)) {
             data.addCraftedMilestone(milestoneKey);
             state.setDirty();
 
-            List<EchoFrame> frames = singleFrame(world, player);
+            List<EchoFrame> frames = FrameSampler.sampleFrames(world, player, pos, frameCount);
             if (!frames.isEmpty()) {
                 var equipment = EquipmentSnapshot.capture(player);
                 var record = EchoService.createEchoFromFrames(
@@ -78,16 +109,5 @@ public final class MilestoneEchoHandler {
                 state.setDirty();
             }
         }
-    }
-
-    private static List<EchoFrame> singleFrame(ServerLevel world, ServerPlayer player) {
-        var buffered = FrameSampler.captureBufferedFrame(player);
-        if (buffered == null) return List.of();
-        BlockPos anchor = player.blockPosition();
-        EchoFrame frame = FrameSampler.toRelativeEchoFrame(buffered, anchor, 0);
-        if (frame == null) return List.of();
-        List<EchoFrame> frames = new ArrayList<>(1);
-        frames.add(frame);
-        return frames;
     }
 }

@@ -63,6 +63,7 @@ public final class EchoesConfig {
     // [playback]
     private int triggerRadius = 16;
     private int maxConcurrentPerPlayer = 1;
+    private boolean repeatDeathEchoes = false;
     private float whisperOpacity = 0.25f;
     private float markOpacity = 0.45f;
     private float scarOpacity = 0.70f;
@@ -193,6 +194,7 @@ public final class EchoesConfig {
 
                 case "playback.trigger-radius" -> c.triggerRadius = parseInt(v, c.triggerRadius);
                 case "playback.max-concurrent" -> c.maxConcurrentPerPlayer = parseInt(v, c.maxConcurrentPerPlayer);
+                case "playback.repeat-death-echoes" -> c.repeatDeathEchoes = parseBoolean(v, c.repeatDeathEchoes);
                 case "playback.whisper-opacity" -> c.whisperOpacity = parseFloat(v, c.whisperOpacity);
                 case "playback.mark-opacity" -> c.markOpacity = parseFloat(v, c.markOpacity);
                 case "playback.scar-opacity" -> c.scarOpacity = parseFloat(v, c.scarOpacity);
@@ -278,6 +280,7 @@ public final class EchoesConfig {
                 trigger-radius = 16
                 # Currently only 1 is supported
                 max-concurrent = 1
+                repeat-death-echoes = false
                 whisper-opacity = 0.25
                 mark-opacity = 0.45
                 scar-opacity = 0.70
@@ -394,6 +397,10 @@ public final class EchoesConfig {
 
     public int getMaxConcurrentPerPlayer() {
         return maxConcurrentPerPlayer;
+    }
+
+    public boolean isRepeatDeathEchoes() {
+        return repeatDeathEchoes;
     }
 
     public float getWhisperOpacity() {

@@ -57,24 +57,37 @@ public final class JourneyEchoHandler {
 
             EchoWorldState state = EchoWorldState.get(world);
             PlayerEchoData data = state.getOrCreatePlayerData(uuid);
+            if (data.isOptedOut()) {
+                lastTickPositions.remove(uuid);
+                continue;
+            }
 
             if (lastPos != null) {
-                // D3: Teleport detection
+                // D3: Teleport detection (>10 blocks in a single tick)
                 double distSq = currentPos.distanceToSqr(lastPos);
                 if (distSq > TELEPORT_THRESHOLD_SQ) {
                     // Teleport detected, reset journey
                     data.setSessionOrigin(player.blockPosition().immutable());
                     data.resetSessionDistance();
                     state.setDirty();
-                } else if (isSampleTick) {
-                    // Accumulate distance (using actual BlockPos delta or Vec3d delta)
-                    // We use the sample interval to avoid floating point noise every tick.
-                    float delta = (float) currentPos.distanceTo(lastPos);
-                    data.addToSessionDistanceTraveled(delta);
-                    state.setDirty();
+                } else {
+                    // Accumulate distance every tick (above micro-jitter threshold)
+                    if (distSq > 0.0001) {
+                        data.addToSessionDistanceTraveled((float) Math.sqrt(distSq));
+                        state.setDirty();
+                    }
 
-                    // E5: Journey triggers
-                    handleJourneyMilestones(world, player, state, data, cfg);
+                    // E5: Journey milestones checked on sample ticks
+                    if (isSampleTick) {
+                        handleJourneyMilestones(world, player, state, data, cfg);
+                    }
+                }
+
+                // Check Elytra flight trigger
+                if (player.isFallFlying() && !data.hasFlownElytra()) {
+                    data.setHasFlownElytra(true);
+                    state.setDirty();
+                    emitJourneyEcho(world, player, state, EchoEventType.FIRST_ELYTRA_FLIGHT, 80);
                 }
             } else {
                 // Initialize session if not present
@@ -94,18 +107,18 @@ public final class JourneyEchoHandler {
         // JOURNEY_LONG (Tier 1) - 500 blocks
         if (dist >= cfg.getJourneyTier1Distance() && !data.getCraftedMilestones().contains("journey:tier1")) {
             data.addCraftedMilestone("journey:tier1");
-            emitJourneyEcho(world, player, state, EchoEventType.JOURNEY_LONG);
+            emitJourneyEcho(world, player, state, EchoEventType.JOURNEY_LONG, 30);
         }
         
         // JOURNEY_MARATHON (Tier 3) - 2000 blocks
         if (dist >= cfg.getJourneyTier2Distance() && !data.getCraftedMilestones().contains("journey:tier2")) {
             data.addCraftedMilestone("journey:tier2");
-            emitJourneyEcho(world, player, state, EchoEventType.JOURNEY_MARATHON);
+            emitJourneyEcho(world, player, state, EchoEventType.JOURNEY_MARATHON, 60);
         }
     }
 
-    private static void emitJourneyEcho(ServerLevel world, ServerPlayer player, EchoWorldState state, EchoEventType type) {
-        List<EchoFrame> frames = FrameSampler.singleFrame(world, player);
+    private static void emitJourneyEcho(ServerLevel world, ServerPlayer player, EchoWorldState state, EchoEventType type, int frameCount) {
+        List<EchoFrame> frames = FrameSampler.sampleFrames(world, player, player.blockPosition(), frameCount);
         if (!frames.isEmpty()) {
             var equipment = EquipmentSnapshot.capture(player);
             var record = EchoService.createEchoFromFrames(

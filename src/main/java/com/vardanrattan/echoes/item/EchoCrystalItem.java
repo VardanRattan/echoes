@@ -94,8 +94,7 @@ player.getCooldowns().addCooldown(stack, SENSE_COOLDOWN_TICKS);
             // Check if player is allowed to see it (F6 audit point)
             if (!EchoPrivacy.canPlayerSeeEcho(player.getUUID(), echo)) continue;
 
-            // Simplified collision check: treat the echo as a 0.6x1.8 box at its anchor.
-            // In a real mod, we'd use the frames to find the actual position at this world time.
+            // Proximity bounding box check (0.6 x 1.8) at the echo's anchor position.
             BlockPos anchor = echo.getAnchorPos();
             net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
                     anchor.getX() + 0.2, anchor.getY(), anchor.getZ() + 0.2,

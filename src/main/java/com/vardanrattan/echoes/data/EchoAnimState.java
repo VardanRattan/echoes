@@ -9,6 +9,9 @@ public enum EchoAnimState {
     RUNNING,
     JUMPING,
     FALLING,
+    CROUCHING,
+    SWIMMING,
+    ELYTRA_FLYING,
     DYING
 }
 

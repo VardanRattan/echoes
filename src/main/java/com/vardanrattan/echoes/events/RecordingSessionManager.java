@@ -11,7 +11,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -44,6 +46,7 @@ public final class RecordingSessionManager {
 
     private static final int FRAME_CAPTURE_INTERVAL_TICKS = 2;
     private static final int DEATH_FRAME_COUNT = 50; // 5 seconds at 10 fps
+    private static final int CATASTROPHIC_DEATH_FRAME_COUNT = 80; // 8 seconds at 10 fps
     private static final int MAX_BUFFER_FRAMES = 100; // 10 seconds at 10 fps
     private static final int MANUAL_MAX_TICKS = 160; // 8 seconds at 20 tps
 
@@ -86,9 +89,13 @@ public final class RecordingSessionManager {
             UUID uuid = player.getUUID();
 
             // D2: Update last safe position on the main thread (always, regardless of async).
-            // "Safe" = on ground, or Y is well above the void floor.
-            if (player.onGround() || player.getY() > worldBottomY + SAFE_Y_MARGIN) {
-                lastSafePos.put(uuid, player.blockPosition().immutable());
+            // "Safe" = on ground, not in lava, and with solid non-hazardous block below.
+            if (player.onGround() && !player.isInLava() && player.getY() > worldBottomY + SAFE_Y_MARGIN) {
+                BlockPos pos = player.blockPosition();
+                var stateBelow = world.getBlockState(pos.below());
+                if (!stateBelow.isAir() && !stateBelow.is(net.minecraft.world.level.block.Blocks.LAVA)) {
+                    lastSafePos.put(uuid, pos.immutable());
+                }
             }
 
             Integer currentTick = worldTickCounters.get(uuid);
@@ -186,7 +193,11 @@ public final class RecordingSessionManager {
         BlockPos anchorPos = lastSafePos.getOrDefault(player.getUUID(), player.blockPosition()).immutable();
         lastSafePos.remove(player.getUUID());
 
-        int frameCount = Math.min(buffer.size(), DEATH_FRAME_COUNT);
+        boolean isCatastrophic = player.experienceLevel >= 30 || hasFullEnchantedArmor(player);
+        EchoEventType eventType = isCatastrophic ? EchoEventType.CATASTROPHIC_DEATH : EchoEventType.DEATH;
+        int targetFrameCount = isCatastrophic ? CATASTROPHIC_DEATH_FRAME_COUNT : DEATH_FRAME_COUNT;
+
+        int frameCount = Math.min(buffer.size(), targetFrameCount);
 
         // Take the last N frames (oldest first for correct tick ordering)
         List<BufferedFrame> framesToUse = new ArrayList<>(frameCount);
@@ -221,7 +232,7 @@ public final class RecordingSessionManager {
         EchoRecord record = EchoService.createEchoFromFrames(
                 serverWorld,
                 player,
-                EchoEventType.DEATH,
+                eventType,
                 anchorPos,
                 echoFrames,
                 equipment);
@@ -229,13 +240,62 @@ public final class RecordingSessionManager {
         worldState.addEcho(record);
         EchoService.onEchoCreated(record);
 
-        Echoes.LOGGER.debug("Created DEATH echo {} for {} at {} in {} (frames={}, safeAnchor={})",
+        Echoes.LOGGER.debug("Created {} echo {} for {} at {} in {} (frames={}, safeAnchor={})",
+                eventType,
                 record.getUUID(),
                 player.getName().getString(),
                 anchorPos,
                 serverWorld.dimension().identifier(),
                 record.getFrameCount(),
                 !anchorPos.equals(player.blockPosition()));
+    }
+
+    private static boolean hasFullEnchantedArmor(ServerPlayer player) {
+        if (player == null) return false;
+        EquipmentSlot[] armorSlots = {
+                EquipmentSlot.HEAD,
+                EquipmentSlot.CHEST,
+                EquipmentSlot.LEGS,
+                EquipmentSlot.FEET
+        };
+        for (EquipmentSlot slot : armorSlots) {
+            ItemStack stack = player.getItemBySlot(slot);
+            if (stack.isEmpty() || !stack.isEnchanted()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Extracts the most recent N frames from a player's rolling buffer, converted
+     * to relative EchoFrames anchored at the given position.
+     */
+    public List<EchoFrame> captureRecentFrames(UUID playerUuid, BlockPos anchorPos, int maxFrames) {
+        if (playerUuid == null || anchorPos == null || maxFrames <= 0) {
+            return List.of();
+        }
+        Deque<BufferedFrame> buffer = playerBuffers.get(playerUuid);
+        if (buffer == null || buffer.isEmpty()) {
+            return List.of();
+        }
+        int frameCount = Math.min(buffer.size(), maxFrames);
+        List<BufferedFrame> framesToUse = new ArrayList<>(frameCount);
+        int skip = buffer.size() - frameCount;
+        int i = 0;
+        for (BufferedFrame f : buffer) {
+            if (i++ < skip) continue;
+            framesToUse.add(f);
+        }
+        List<EchoFrame> echoFrames = new ArrayList<>(framesToUse.size());
+        for (int j = 0; j < framesToUse.size(); j++) {
+            BufferedFrame bf = framesToUse.get(j);
+            EchoFrame frame = FrameSampler.toRelativeEchoFrame(bf, anchorPos, j * FRAME_CAPTURE_INTERVAL_TICKS);
+            if (frame != null) {
+                echoFrames.add(frame);
+            }
+        }
+        return echoFrames;
     }
 
     /**

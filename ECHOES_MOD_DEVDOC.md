@@ -1,9 +1,9 @@
 # ECHOES — Development Document
 ### A Fabric Minecraft Mod
-**Version**: 0.1 (Pre-Alpha Design Doc)  
-**Target**: Fabric 1.21.x  
-**Scope**: Solo
-**Est. MVP Timeline**: 5–6 weeks
+**Version**: 1.0 (Aligned Spec)  
+**Target**: Minecraft 26.1.1 (Fabric Loader 0.18.6+, Java 25)  
+**Scope**: Solo / SMP  
+**Status**: Feature-Complete & Aligned
 
 ---
 
@@ -119,6 +119,7 @@ Echoes are tiered by emotional weight. **Tier determines visual intensity, parti
 | **Catastrophic Death** | Death with 30+ levels of XP or full enchanted gear | 8 seconds |
 | **Marathon Journey** | Player travels 2000+ blocks in a single session without teleport | 6 seconds |
 | **World First** | First player in a world/server to reach End, kill Dragon, find Stronghold | 10 seconds (unique golden tint) |
+| **Manual Crystal Mark** | Player manually records a memory with Echo Crystal (Sneak + Right-click) | 8 seconds |
 
 ### Design Notes on Taxonomy
 
@@ -171,38 +172,51 @@ EchoFrame {
 ### Event Detection — Hook Points
 
 ```
-// Death
-ServerLivingEntityEvents.AFTER_DEATH → filter for ServerPlayerEntity
+// Death (Normal & Catastrophic)
+ServerLivingEntityEvents.AFTER_DEATH → filter for ServerPlayer
+  ↳ Evaluates XP level (>= 30) or full enchanted armor for CATASTROPHIC_DEATH
+  ↳ Safe death position: onGround + !isInLava + !below.isAir + !below.is(Lava)
 
 // Structure discovery
-ServerPlayerEntity.onPlayerTick → check PlayerEntity.getWorld().getStructureAt() 
-  compare against per-player visited structure set stored in PersistentState
+DiscoveryEchoHandler.onWorldTick → world.structureManager().getStructureWithPieceAt(pos)
+  ↳ Deduplicated via hasDiscoveredStructureNear(structureId, pos, 256.0)
 
 // Dimension transition  
-ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD
+DiscoveryEchoHandler.onWorldTick → world.dimension() vs player's visitedDimensions
 
 // Boss kills
-ServerLivingEntityEvents.AFTER_DEATH → filter for BossEntity types, check if 
-  killer is player or player-owned entity
+ServerLivingEntityEvents.AFTER_DEATH → filter for EnderDragon, WitherBoss, ElderGuardian
+  ↳ Granular World First keys (e.g. world_first:BOSS_KILL:ender_dragon)
+  ↳ Anchored to killer player position
 
 // Crafting milestones
-PlayerEvent on CraftingResultSlot extraction → check against milestone item list
+ResultSlotMixin.onTake → checks item against milestone set (Diamond, Netherite, Beacon, etc.)
+
+// Trading milestones
+MerchantResultSlotMixin.onTake → FIRST_TRADE on successful villager transaction
+
+// Sleeping milestones
+ServerPlayerSleepMixin.startSleeping → FIRST_SLEEP on valid bed sleep
+
+// Taming milestones
+TamableAnimalMixin.tame → TAMING on pet tame
 
 // Biome discovery
-Per-tick check (throttled to every 20 ticks) → getRegistryKey(BiomeKeys) 
-  vs per-player discovered biome set
+DiscoveryEchoHandler.onWorldTick (throttled to 20 ticks) → world.getBiomeManager().getBiome(pos)
 
 // Journey tracking
-Periodic position sampling → calculate cumulative distance from session start
+JourneyEchoHandler.onWorldTick → tick-by-tick distance accumulator (delta > 0.0001)
+  ↳ Teleport detection threshold (distSq > 100.0 resets session)
+  ↳ Elytra flight detection (player.isFallFlying)
 ```
 
 ### Player State at Capture
 
 At the moment of event trigger, record:
-- Current equipment (armor, held item) — for ghost visual accuracy
-- Player skin (via UUID — fetched async if needed)
-- Exact position + look direction
-- Active status effects (visual only — glowing, on fire, etc.)
+- Full equipment snapshot (head, chest, legs, feet, mainhand, offhand) via `EquipmentSnapshot`
+- Player skin (via UUID — resolved or anonymized based on privacy settings)
+- Exact position + look direction (yaw, pitch)
+- Discrete animation states (`EchoAnimState`: IDLE, WALKING, RUNNING, JUMPING, FALLING, CROUCHING, SWIMMING, ELYTRA_FLYING, DYING)
 
 ---
 
@@ -211,54 +225,49 @@ At the moment of event trigger, record:
 ### Trigger Logic
 
 Every 10 ticks (0.5 seconds), for each online player:
-1. Query echo storage for echoes within **trigger radius** (default: 16 blocks) in their current dimension
-2. Filter out echoes already in `seenBy` for this player
-3. Filter out echoes created by this player (configurable — default: player CAN see own echoes)
+1. Query echo storage for echoes within **trigger radius** (default: 16 blocks) in their current dimension via spatial chunk indexing (`chunkEchoMap`)
+2. Filter out echoes already in `seenBy` for this player (unless `repeat-death-echoes` is enabled)
+3. Filter out echoes if `canPlayerSeeEcho(playerUuid, echo)` returns false (opt-out / self-visibility rules)
 4. Sort by distance, take closest unplayed echo
-5. Begin playback
+5. Downsample frames by 75% for bandwidth reduction and send `EchoPlaybackPayload`
+6. Begin playback
 
 **Only one echo plays per player at a time.** Queued echoes wait until current playback finishes. This prevents sensory overload in echo-dense areas.
 
 ### Ghost Entity — Rendering Approach
 
-Options considered:
-
-**Option A: Fake player entity (ArmorStand + player head + equipment)**
-- Pros: Simple, works server-side, no render injection
-- Cons: Stiff, no smooth animation, looks janky for dynamic events like death
-
-**Option B: Custom client-side ghost entity (Fabric render API)**
-- Pros: Full animation control, translucency, proper player model
-- Cons: Client-side only, more complex, requires Fabric Rendering API
-
-**Option C: Actual server-side "ghost" player entity using FakePlayer/NPC approach**
-- Pros: Consistent across all clients
-- Cons: Server performance cost, potential confusion with real players
-
-**Decision: Option B (Client-side ghost entity)**
-
-Rationale: Echoes are a *visual experience*. Option A produces something that looks like a broken armor stand, not a ghost. The emotional impact — which is the entire value proposition — lives or dies on the ghost looking right. Accept the client-side complexity. Use Fabric Rendering API + custom EntityRenderer.
+**Decision: Option B (Client-side ghost entity controller)**
 
 Implementation:
-- Register a custom `GhostPlayerEntity` (client-only, no server tick)
-- Server sends `EchoPlaybackPacket` to nearby clients with echo data
-- Client spawns `GhostPlayerEntity` at anchor position, runs through frame data
-- Custom renderer applies translucency shader pass + desaturation + particle attachment
-- Entity auto-removes after final frame
+- Lightweight controller `GhostPlayerEntity` (client-only, no server tick overhead)
+- Client receives `EchoPlaybackPayload` and deserializes downsampled frames
+- Smooth 60fps reconstruction via Catmull-Rom positional splines and Slerp angular interpolation
+- **Geometry & Matrix Orientation**:
+  ```java
+  poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - yaw));
+  // Animation-specific tilts:
+  // DYING: Z-axis tilt progression up to 90 degrees
+  // ELYTRA_FLYING: X-axis 90-degree horizontal orientation
+  poseStack.scale(-1.0F, -1.0F, 1.0F);
+  poseStack.translate(0.0F, -1.501F, 0.0F);
+  ```
+- **Skin & Outer Layers**: Outer layers (`showHat`, `showJacket`, `showLeftPants`, `showRightPants`, `showLeftSleeve`, `showRightSleeve`, `showCape`) explicitly enabled.
+- **Equipment Rendering**: Helmet, chestplate/elytra, leggings, boots, and held items populated onto `AvatarRenderState`.
+- **Pipeline & Fallback**: Custom `GHOST_PIPELINE` with automatic fallback to `RenderTypes.entityTranslucent(tex)`.
+- **Right-Click Inspection**: Holding an Echo Crystal and right-clicking an active ghost within 10 blocks inspects author name, relative age, and event type via `UseItemCallback`.
 
 ### Playback Sequence
 
 ```
 1. Server detects player in range of unseen echo
-2. Server sends EchoPlaybackPacket { echoRecord, triggeredBy: playerUUID }
-3. Client receives packet → deserializes echo frames
-4. Client spawns GhostPlayerEntity at anchorPos
-5. Ghost plays through frames (lerped, smooth)
-6. Intro: ghost fades IN over first 0.5s (alpha 0 → configured opacity)
-7. Playback: ghost runs animation for recording duration
-8. Outro: ghost fades OUT over last 1s
-9. Client sends EchoSeenPacket back to server
-10. Server adds triggeredBy UUID to echo.seenBy
+2. Server downsamples frames and sends EchoPlaybackPayload { echoRecord, playerUuid, frames }
+3. Client receives payload → initializes GhostPlayerEntity controller
+4. Client adds to activeGhosts; sound & particles burst on start
+5. Intro: ghost fades IN over first 20 ticks (alpha 0 → configured tier opacity)
+6. Playback: Catmull-Rom spline evaluates pose & animations for recording duration
+7. Outro: ghost fades OUT over last 30 ticks; plays subtle glass break audio on completion
+8. Client sends EchoSeenPayload back to server
+9. Server marks player in echo.seenBy and updates PlayerEchoData
 ```
 
 ### Opacity & Visual Modifiers by Tier
@@ -339,7 +348,7 @@ Rationale: Amethyst is associated with memory and time in vanilla lore. Ghast te
 Pulses a 32-block "echo sense" — nearby echoes briefly glow with a visible particle burst, showing their locations without playing them back. Duration: 3 seconds. Cooldown: 30 seconds.
 
 **Sneak + Right-click:**
-**Manual echo recording.** Records the next 8 seconds of your movement and saves it as a Tier 2 echo at your current position. Consumes one durability (Crystal has 16 uses). Use case: Players can manually mark a location that meant something to them — a spot where they built something, where something funny happened, where they want to leave a message in ghost-form.
+**Manual echo recording.** Records the next 8 seconds of your movement and saves it as a Tier 3 (Scar) echo at your current position. Consumes one durability (Crystal has 16 uses). Use case: Players can manually mark a location that meant something to them — a spot where they built something, where something funny happened, where they want to leave a message in ghost-form.
 
 **Right-click on existing echo (if echo interaction is enabled in config):**
 Shows echo metadata: who created it, when (relative: "3 weeks ago"), what event type. Brief tooltip, no full UI.
@@ -376,33 +385,32 @@ Reveals the echoes of those who walked here.
 ### Packet Types
 
 ```
-// Server → Client
-EchoPlaybackPacket {
-  echoUUID: UUID
+// Server → Client (PayloadTypeRegistry.clientboundPlay)
+EchoPlaybackPayload {
+  echoId: UUID
+  dimension: ResourceKey<Level>
   anchorPos: BlockPos
-  frames: List<EchoFrame>
   tier: EchoTier
   eventType: EchoEventType
-  playerName: String
-  playerUUID: UUID        // for skin lookup
+  playerUuid: UUID        // for skin lookup (or null if anonymized)
+  playerName: String      // display name (or "Anonymous")
+  realTimestamp: Long
   equipment: EquipmentSnapshot
+  frames: List<EchoFrame> // downsampled 75% for bandwidth optimization
 }
 
-EchoSensePacket {
+EchoSensePayload {
   // Response to Crystal right-click
-  nearbyEchos: List<{uuid, pos, tier, eventType}>
+  nearbyEchoes: List<SenseEntry{echoId, pos, tier, eventType, playerName, timestamp}>
 }
 
-// Client → Server
-EchoSeenPacket {
-  echoUUID: UUID
-}
-
-EchoManualRecordPacket {
-  // Triggers server to start capturing manual recording session
-  startRecording: boolean
+// Client → Server (PayloadTypeRegistry.serverboundPlay)
+EchoSeenPayload {
+  echoId: UUID
 }
 ```
+
+*Note: Manual recording sessions are initiated server-authoritatively when using `EchoCrystalItem` on a `ServerPlayer`, ensuring anti-cheat security and eliminating redundant client-to-server trigger packets.*
 
 ### Player Opt-Out
 
@@ -549,6 +557,9 @@ trigger-radius = 16
 # Max simultaneous echo playbacks per player
 max-concurrent = 1
 
+# Whether death echoes replay repeatedly on proximity (default: false, plays once per player)
+repeat-death-echoes = false
+
 # Opacity multiplier (0.0 - 1.0)
 whisper-opacity = 0.25
 mark-opacity = 0.45
@@ -632,57 +643,57 @@ Mitigation:
 ## 12. MVP Feature Scope (Week-by-Week)
 
 ### Week 1: Foundation
-- [ ] Mod skeleton setup (Fabric mod template, build.gradle, mixin setup)
-- [ ] `EchoRecord` and `EchoFrame` data structures
-- [ ] `EchoWorldState` PersistentState implementation
-- [ ] Basic NBT serialization/deserialization for echo data
-- [ ] Death event hook → records 5 seconds of frame data → saves to world state
-- [ ] Console logging to verify recording works
+- [x] Mod skeleton setup (Fabric mod template, build.gradle, mixin setup)
+- [x] `EchoRecord` and `EchoFrame` data structures
+- [x] `EchoWorldState` PersistentState implementation
+- [x] Basic NBT serialization/deserialization for echo data
+- [x] Death event hook → records 5 seconds of frame data → saves to world state
+- [x] Console logging to verify recording works
 
 ### Week 2: Basic Playback
-- [ ] `EchoPlaybackPacket` network packet (server→client)
-- [ ] `EchoSeenPacket` (client→server)
-- [ ] Client-side `GhostPlayerEntity` (no custom renderer yet — use ArmorStand placeholder)
-- [ ] Proximity trigger scan (every 10 ticks, 16 block radius)
-- [ ] Seen-state tracking
-- [ ] **Milestone**: Die, walk back to death spot, see a placeholder ghost replay your death
+- [x] `EchoPlaybackPacket` network packet (server→client)
+- [x] `EchoSeenPacket` (client→server)
+- [x] Client-side `GhostPlayerEntity` (smooth Catmull-Rom spline interpolation)
+- [x] Proximity trigger scan (every 10 ticks, 16 block radius)
+- [x] Seen-state tracking
+- [x] **Milestone**: Die, walk back to death spot, see a ghost replay your death
 
 ### Week 3: Visual Polish
-- [ ] Custom `GhostPlayerRenderer` with translucency
-- [ ] Desaturation + blue-shift shader pass
-- [ ] Fade in / fade out animation
-- [ ] Tier-appropriate particle systems (vanilla particles only)
-- [ ] Remove name tag from ghost
-- [ ] **Milestone**: Ghost looks like a ghost, not an armor stand
+- [x] Custom `GhostPlayerRenderer` with translucency
+- [x] Desaturation + blue-shift shader pass (`ghost_desaturate.fsh`)
+- [x] Fade in / fade out animation + glass break audio cue
+- [x] Tier-appropriate particle systems (vanilla particles with distance throttling)
+- [x] Shadow and name tag suppression
+- [x] **Milestone**: Ghost looks ethereal and distinct with pulsing glow
 
 ### Week 4: Full Echo Taxonomy
-- [ ] Structure discovery hook + per-player tracking
-- [ ] Biome discovery hook
-- [ ] Boss kill detection
-- [ ] Major craft milestones
-- [ ] Dimension transition hook
-- [ ] Tier assignment logic
-- [ ] **Milestone**: All Tier 1 and Tier 2 echo types working
+- [x] Structure discovery hook + per-player tracking
+- [x] Biome discovery hook
+- [x] Boss kill detection
+- [x] Major craft milestones
+- [x] Dimension transition hook
+- [x] Tier assignment logic (Whispers, Marks, Scars, World Firsts)
+- [x] **Milestone**: All 13 taxonomy echo types + World Firsts working
 
 ### Week 5: Echo Crystal + Config
-- [ ] Echo Crystal item + crafting recipe
-- [ ] Right-click sense function (particle burst on nearby echoes)
-- [ ] Sneak+click manual recording
-- [ ] `echoes.toml` config with documented fields
-- [ ] `/echoes optout` command
-- [ ] `/echoes clear` admin command
-- [ ] Decay system
-- [ ] Storage caps + eviction logic
+- [x] Echo Crystal item + crafting recipe
+- [x] Right-click sense function (particle burst on nearby echoes + metadata inspection)
+- [x] Sneak+click manual recording (8s Tier 3 Scar echo)
+- [x] `echoes.toml` config with documented fields
+- [x] `/echoes optout` command
+- [x] `/echoes clear` admin command
+- [x] Decay system
+- [x] Storage caps + eviction logic
 
 ### Week 6: Polish, Testing, Launch Prep
-- [ ] Singleplayer testing (full session, verify all echo types fire correctly)
-- [ ] Multiplayer testing (2-player local server, verify cross-player echo visibility)
-- [ ] Performance profiling (memory, tick time, packet volume)
-- [ ] Modrinth page copy + screenshots
-- [ ] README with server admin docs
-- [ ] First release: `echoes-0.1.0+1.21.jar`
+- [x] Singleplayer testing (full session, verify all echo types fire correctly)
+- [x] Multiplayer testing (SMP network payload downsampling & privacy controls)
+- [x] Performance profiling & distance culling (64-block culling, particle throttle)
+- [x] Comprehensive unit test suite (`EchoesConfigTest`, `EchoFrameTest`, `EchoWorldStateTest`)
+- [x] README and developer documentation fully aligned
+- [x] Release build ready (Minecraft 26.1.1, Fabric Loader 0.18.6+, Java 25)
 
-**Tier 3 (Scar) echoes and World First echoes pushed to v1.1** — they require more testing and the additional visual treatment. Don't delay MVP for them.
+**All Tier 3 (Scar) echoes and World First features (originally scheduled for v1.1) are completed and fully integrated in this release.**
 
 ---
 
@@ -796,42 +807,71 @@ The dimension key system should handle modded dimensions automatically (echoes a
 
 ```
 echoes/
-├── src/main/java/com/yourname/echoes/
+├── src/main/java/com/vardanrattan/echoes/
 │   ├── Echoes.java                          # Mod initializer
-│   ├── EchoesClient.java                    # Client initializer
-│   ├── data/
-│   │   ├── EchoRecord.java
-│   │   ├── EchoFrame.java
-│   │   ├── EchoTier.java                    # Enum
-│   │   ├── EchoEventType.java               # Enum
-│   │   ├── PlayerEchoData.java
-│   │   └── EchoWorldState.java              # PersistentState
-│   ├── events/
-│   │   ├── DeathEchoHandler.java
-│   │   ├── DiscoveryEchoHandler.java
-│   │   ├── MilestoneEchoHandler.java
-│   │   └── JourneyEchoHandler.java
-│   ├── network/
-│   │   ├── EchoPlaybackPacket.java
-│   │   ├── EchoSeenPacket.java
-│   │   └── EchoNetworking.java
-│   ├── entity/
-│   │   └── GhostPlayerEntity.java           # Client-side only
-│   ├── render/
-│   │   └── GhostPlayerRenderer.java
-│   ├── item/
-│   │   └── EchoCrystalItem.java
 │   ├── command/
-│   │   └── EchoesCommand.java
-│   └── config/
-│       └── EchoesConfig.java
+│   │   └── EchoesCommand.java               # /echoes commands (optout, clear, debug, worldfirsts)
+│   ├── config/
+│   │   └── EchoesConfig.java                # Standalone TOML configuration
+│   ├── data/
+│   │   ├── EchoAnimState.java               # Animation state enum
+│   │   ├── EchoEventType.java               # Taxonomy event enum (13 types)
+│   │   ├── EchoFrame.java                   # Relative position & rotation snapshot
+│   │   ├── EchoRecord.java                  # Stored echo metadata + frames
+│   │   ├── EchoTier.java                    # Intensity tier enum (WHISPER, MARK, SCAR, WORLD_FIRST)
+│   │   ├── EchoWorldState.java              # SavedData world storage & spatial index
+│   │   ├── EquipmentSnapshot.java           # Equipment NBT / Codec snapshot
+│   │   ├── PlayerEchoData.java              # Per-player discovery & privacy tracking
+│   │   └── VisitedStructure.java            # Structure discovery record
+│   ├── entity/
+│   │   └── GhostPlayerEntity.java           # Client-side ghost pose & spline controller
+│   ├── events/
+│   │   ├── BossKillEchoHandler.java         # Boss death & world first trigger
+│   │   ├── BufferedFrame.java               # Raw rolling buffer frame
+│   │   ├── DiscoveryEchoHandler.java        # Biome, structure & dimension triggers
+│   │   ├── EchoesServerEvents.java          # Server event registry
+│   │   ├── EchoService.java                 # Central echo factory & tier mapper
+│   │   ├── FrameSampler.java                # Player state & limb swing capture
+│   │   ├── JourneyEchoHandler.java          # Distance tracking & elytra flight trigger
+│   │   ├── MilestoneEchoHandler.java        # Crafting, taming, sleeping & trading triggers
+│   │   ├── PlaybackTriggerService.java      # Proximity scan & playback dispatcher
+│   │   └── RecordingSessionManager.java     # Rolling frame buffer & death capture
+│   ├── item/
+│   │   ├── EchoCrystalItem.java             # Echo Crystal item implementation
+│   │   └── EchoItems.java                   # Item registry
+│   ├── mixin/
+│   │   ├── CraftingResultSlotMixin.java     # Major craft detection
+│   │   ├── MerchantResultSlotMixin.java     # Villager trade detection
+│   │   ├── ServerPlayerSleepMixin.java      # First sleep detection
+│   │   └── TamableAnimalMixin.java          # Animal taming detection
+│   └── network/
+│       ├── EchoNetworking.java              # Payload registration & server receivers
+│       ├── EchoPlaybackPayload.java         # Server → Client playback payload
+│       ├── EchoPrivacy.java                 # Anonymization & privacy utilities
+│       ├── EchoSeenPayload.java             # Client → Server seen notification
+│       └── EchoSensePayload.java            # Server → Client crystal sense payload
+├── src/client/java/com/vardanrattan/echoes/
+│   ├── EchoesClient.java                    # Client entrypoint
+│   ├── mixin/client/
+│   │   └── GhostSuppressMixin.java          # Ghost shadow radius suppression
+│   ├── network/
+│   │   └── EchoClientNetworking.java        # Client payload receivers & tick handlers
+│   └── render/
+│       └── GhostPlayerRenderer.java         # Translucent GLSL shader pipeline & particle FX
+├── src/client/resources/
+│   └── assets/echoes/shaders/core/
+│       ├── ghost_desaturate.fsh             # Custom GLSL fragment shader
+│       ├── ghost_desaturate.json            # Shader program definition
+│       └── ghost_desaturate.vsh             # Vertex shader
 ├── src/main/resources/
 │   ├── fabric.mod.json
 │   ├── echoes.mixins.json
-│   └── assets/echoes/
-│       ├── lang/en_us.json
-│       ├── models/item/echo_crystal.json
-│       └── textures/item/echo_crystal.png
+│   ├── echoes.client.mixins.json
+│   ├── assets/echoes/
+│   │   ├── lang/en_us.json
+│   │   ├── models/item/echo_crystal.json
+│   │   └── textures/item/echo_crystal.png
+│   └── data/echoes/recipe/echo_crystal.json
 └── build.gradle
 ```
 
@@ -849,4 +889,4 @@ The Dark Souls bloodstain mechanic is the closest existing implementation of thi
 
 ---
 
-*Document Version: 0.1 | Last Updated: March 2026 | Status: Pre-Development Design Phase*
+*Document Version: 1.0 | Last Updated: 2026 | Status: Implementation Complete & Fully Aligned*

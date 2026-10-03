@@ -1,6 +1,7 @@
 package com.vardanrattan.echoes.data;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.Level;
@@ -24,6 +25,10 @@ public final class PlayerEchoData {
     private boolean optedOut;
     private boolean displayOptedOut;
 
+    private boolean hasSlept;
+    private boolean hasTraded;
+    private boolean hasFlownElytra;
+
     private BlockPos sessionOrigin;
     private float sessionDistanceTraveled;
 
@@ -45,6 +50,19 @@ public final class PlayerEchoData {
         if (structure != null) {
             discoveredStructures.add(structure);
         }
+    }
+
+    public boolean hasDiscoveredStructureNear(Identifier structureId, BlockPos pos, double radius) {
+        if (structureId == null || pos == null) return false;
+        double radiusSq = radius * radius;
+        for (VisitedStructure vs : discoveredStructures) {
+            if (vs.structureId().equals(structureId)) {
+                if (vs.approximatePos().distSqr(pos) <= radiusSq) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public Set<ResourceKey<Level>> getVisitedDimensions() {
@@ -95,6 +113,30 @@ public final class PlayerEchoData {
 
     public void setDisplayOptedOut(boolean displayOptedOut) {
         this.displayOptedOut = displayOptedOut;
+    }
+
+    public boolean hasSlept() {
+        return hasSlept;
+    }
+
+    public void setHasSlept(boolean hasSlept) {
+        this.hasSlept = hasSlept;
+    }
+
+    public boolean hasTraded() {
+        return hasTraded;
+    }
+
+    public void setHasTraded(boolean hasTraded) {
+        this.hasTraded = hasTraded;
+    }
+
+    public boolean hasFlownElytra() {
+        return hasFlownElytra;
+    }
+
+    public void setHasFlownElytra(boolean hasFlownElytra) {
+        this.hasFlownElytra = hasFlownElytra;
     }
 
     public BlockPos getSessionOrigin() {

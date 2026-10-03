@@ -3,7 +3,10 @@
 	"package": "com.vardanrattan.echoes.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
-		"CraftingResultSlotMixin"
+		"CraftingResultSlotMixin",
+		"TamableAnimalMixin",
+		"ServerPlayerSleepMixin",
+		"MerchantResultSlotMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

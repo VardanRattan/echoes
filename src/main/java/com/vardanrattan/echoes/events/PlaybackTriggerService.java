@@ -74,10 +74,10 @@ public final class PlaybackTriggerService {
             if (candidates.isEmpty()) continue;
 
             EchoRecord best = candidates.stream()
-                    // Death echoes are replayable; other events are one-shot per player.
-                    .filter(e -> e.getEventType() == com.vardanrattan.echoes.data.EchoEventType.DEATH || !e.hasBeenSeenBy(player.getUUID()))
-                    .filter(e -> e.getEventType() == com.vardanrattan.echoes.data.EchoEventType.DEATH || !pd.hasSeenEcho(e.getUUID()))
-                    .filter(e -> cfg.isSelfEchoesVisible() || (e.getPlayerUuid() == null || !e.getPlayerUuid().equals(player.getUUID())))
+                    // Echoes are one-shot per player by default; death echoes can optionally repeat if configured.
+                    .filter(e -> (cfg.isRepeatDeathEchoes() && e.getEventType() == com.vardanrattan.echoes.data.EchoEventType.DEATH) || !e.hasBeenSeenBy(player.getUUID()))
+                    .filter(e -> (cfg.isRepeatDeathEchoes() && e.getEventType() == com.vardanrattan.echoes.data.EchoEventType.DEATH) || !pd.hasSeenEcho(e.getUUID()))
+                    .filter(e -> com.vardanrattan.echoes.network.EchoPrivacy.canPlayerSeeEcho(player.getUUID(), e))
                     .min(Comparator.comparingDouble(e -> center.distSqr(e.getAnchorPos())))
                     .orElse(null);
 

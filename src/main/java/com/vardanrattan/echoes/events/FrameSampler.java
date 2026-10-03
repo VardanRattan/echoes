@@ -92,6 +92,15 @@ public final class FrameSampler {
         if (!player.isAlive()) {
             return EchoAnimState.DYING;
         }
+        if (player.isFallFlying()) {
+            return EchoAnimState.ELYTRA_FLYING;
+        }
+        if (player.isVisuallySwimming() || player.isSwimming()) {
+            return EchoAnimState.SWIMMING;
+        }
+        if (player.isCrouching()) {
+            return EchoAnimState.CROUCHING;
+        }
         if (!player.onGround() && player.getDeltaMovement().y < 0) {
             return EchoAnimState.FALLING;
         }
@@ -109,17 +118,30 @@ public final class FrameSampler {
     }
 
     /**
-     * Helper to create a single-frame echo at the player's current position.
+     * Helper to capture recent animated frames from rolling buffer, falling back to a single frame.
      */
-    public static java.util.List<EchoFrame> singleFrame(ServerLevel world, ServerPlayer player) {
+    public static java.util.List<EchoFrame> sampleFrames(ServerLevel world, ServerPlayer player, BlockPos anchor, int frameCount) {
+        var rsm = com.vardanrattan.echoes.Echoes.getRecordingSessionManager();
+        if (rsm != null) {
+            var recent = rsm.captureRecentFrames(player.getUUID(), anchor, frameCount);
+            if (!recent.isEmpty()) {
+                return recent;
+            }
+        }
         var buffered = captureBufferedFrame(player);
         if (buffered == null) return java.util.Collections.emptyList();
-        BlockPos anchor = player.blockPosition();
         EchoFrame frame = toRelativeEchoFrame(buffered, anchor, 0);
         if (frame == null) return java.util.Collections.emptyList();
         java.util.List<EchoFrame> frames = new java.util.ArrayList<>(1);
         frames.add(frame);
         return frames;
+    }
+
+    /**
+     * Helper to create a single-frame echo at the player's current position.
+     */
+    public static java.util.List<EchoFrame> singleFrame(ServerLevel world, ServerPlayer player) {
+        return sampleFrames(world, player, player.blockPosition(), 1);
     }
 }
 

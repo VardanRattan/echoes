@@ -84,6 +84,9 @@ public final class EchoWorldState extends SavedData {
     private static final String TAG_PLAYER_SEEN = "seenEchos";
     private static final String TAG_PLAYER_OPTED_OUT = "optedOut";
     private static final String TAG_PLAYER_DISPLAY_OPTED_OUT = "displayOptedOut";
+    private static final String TAG_PLAYER_HAS_SLEPT = "hasSlept";
+    private static final String TAG_PLAYER_HAS_TRADED = "hasTraded";
+    private static final String TAG_PLAYER_HAS_FLOWN_ELYTRA = "hasFlownElytra";
     private static final String TAG_PLAYER_SESSION_ORIGIN = "sessionOrigin";
     private static final String TAG_PLAYER_SESSION_DISTANCE = "sessionDistanceTraveled";
 
@@ -263,6 +266,10 @@ public final class EchoWorldState extends SavedData {
         worldFirstsClaimed.add(eventKey);
         setDirty();
         return true;
+    }
+
+    public Set<String> getWorldFirstsClaimed() {
+        return Collections.unmodifiableSet(worldFirstsClaimed);
     }
 
     public EchoRecord getEchoById(UUID echoUuid) {
@@ -748,6 +755,9 @@ public final class EchoWorldState extends SavedData {
 
             data.setOptedOut(nbt.getBoolean(TAG_PLAYER_OPTED_OUT).orElse(false));
             data.setDisplayOptedOut(nbt.getBoolean(TAG_PLAYER_DISPLAY_OPTED_OUT).orElse(false));
+            data.setHasSlept(nbt.getBoolean(TAG_PLAYER_HAS_SLEPT).orElse(false));
+            data.setHasTraded(nbt.getBoolean(TAG_PLAYER_HAS_TRADED).orElse(false));
+            data.setHasFlownElytra(nbt.getBoolean(TAG_PLAYER_HAS_FLOWN_ELYTRA).orElse(false));
 
             if (nbt.contains(TAG_PLAYER_SESSION_ORIGIN)) {
                 CompoundTag posNbt = nbt.getCompound(TAG_PLAYER_SESSION_ORIGIN).orElse(new CompoundTag());
@@ -817,6 +827,9 @@ public final class EchoWorldState extends SavedData {
 
             nbt.putBoolean(TAG_PLAYER_OPTED_OUT, data.isOptedOut());
             nbt.putBoolean(TAG_PLAYER_DISPLAY_OPTED_OUT, data.isDisplayOptedOut());
+            nbt.putBoolean(TAG_PLAYER_HAS_SLEPT, data.hasSlept());
+            nbt.putBoolean(TAG_PLAYER_HAS_TRADED, data.hasTraded());
+            nbt.putBoolean(TAG_PLAYER_HAS_FLOWN_ELYTRA, data.hasFlownElytra());
 
             BlockPos origin = data.getSessionOrigin();
             if (origin != null) {

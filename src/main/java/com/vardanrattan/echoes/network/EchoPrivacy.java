@@ -5,8 +5,8 @@ import com.vardanrattan.echoes.data.EchoRecord;
 import java.util.UUID;
 
 /**
- * F6: Centralizes privacy logic for echo visibility and player identification.
- * Honors hide-player-names and anonymize-all config flags.
+ * Centralizes privacy logic for echo visibility and player identification.
+ * Honors hide-player-names, anonymize-all, and self-echoes-visible config flags.
  */
 public final class EchoPrivacy {
 
@@ -17,6 +17,7 @@ public final class EchoPrivacy {
      * Returns the name to display for an echo, respecting privacy settings.
      */
     public static String resolvePlayerName(EchoRecord echo) {
+        if (echo == null) return "Anonymous";
         EchoesConfig cfg = EchoesConfig.get();
         if (cfg.isAnonymizeAll() || cfg.isHidePlayerNames()) {
             return "Anonymous";
@@ -26,22 +27,29 @@ public final class EchoPrivacy {
 
     /**
      * Returns the UUID to use for skin rendering, respecting privacy settings.
-     * If anonymize-all is true, returns a null UUID to trigger default skin fallback.
+     * If anonymize-all is true, returns null to trigger default skin fallback.
      */
     public static UUID resolvePlayerUuid(EchoRecord echo) {
-        if (EchoesConfig.get().isAnonymizeAll()) {
-            // Returning a fixed UUID for "Anonymous" or null to use Steve/Alex fallback.
+        if (echo == null || EchoesConfig.get().isAnonymizeAll()) {
             return null;
         }
         return echo.getPlayerUuid();
     }
 
     /**
-     * Audit point for checking if a player should be allowed to see a specific echo.
+     * Checks if a viewer is allowed to see a specific echo based on privacy and visibility rules.
      */
     public static boolean canPlayerSeeEcho(UUID viewerUuid, EchoRecord echo) {
-        // Future: could add blocklists, team-only echoes, etc.
-        // For now, just a stub for future-proofing.
+        if (echo == null) {
+            return false;
+        }
+        if (viewerUuid == null) {
+            return true;
+        }
+        EchoesConfig cfg = EchoesConfig.get();
+        if (!cfg.isSelfEchoesVisible() && viewerUuid.equals(echo.getPlayerUuid())) {
+            return false;
+        }
         return true;
     }
 }

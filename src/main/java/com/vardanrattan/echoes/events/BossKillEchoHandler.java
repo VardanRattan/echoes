@@ -10,6 +10,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.monster.ElderGuardian;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.BlockPos;
@@ -38,8 +40,13 @@ public final class BossKillEchoHandler {
                 if (killer != null) {
                     ServerLevel world = killer.level();
                     EchoWorldState state = EchoWorldState.get(world);
+                    var playerData = state.getOrCreatePlayerData(killer.getUUID());
+                    if (playerData.isOptedOut()) {
+                        return;
+                    }
                     
-                    emitBossKillEcho(world, killer, state, entity.blockPosition());
+                    String bossType = getBossType(entity);
+                    emitBossKillEcho(world, killer, state, killer.blockPosition(), bossType);
                 }
             }
         });
@@ -51,29 +58,40 @@ public final class BossKillEchoHandler {
                entity instanceof ElderGuardian;
     }
 
+    private static String getBossType(Entity entity) {
+        if (entity instanceof EnderDragon) return "ender_dragon";
+        if (entity instanceof WitherBoss) return "wither";
+        if (entity instanceof ElderGuardian) return "elder_guardian";
+        return "unknown";
+    }
+
     private static ServerPlayer resolvePlayerKiller(Entity attacker) {
         if (attacker instanceof ServerPlayer player) {
             return player;
         }
-        // Could be a projectile or tamed mob, but for now we simplify.
+        if (attacker instanceof Projectile projectile) {
+            Entity owner = projectile.getOwner();
+            if (owner instanceof ServerPlayer player) {
+                return player;
+            }
+        }
+        if (attacker instanceof TamableAnimal tameable && tameable.getOwner() instanceof ServerPlayer player) {
+            return player;
+        }
         return null;
     }
 
-    private static void emitBossKillEcho(ServerLevel world, ServerPlayer player, EchoWorldState state, BlockPos pos) {
-        // Special case: singleFrame with custom anchor (the boss's death pos)
-        var buffered = FrameSampler.captureBufferedFrame(player);
-        if (buffered == null) return;
-        EchoFrame frame = FrameSampler.toRelativeEchoFrame(buffered, pos, 0);
-        if (frame == null) return;
-        List<EchoFrame> frames = List.of(frame);
+    private static void emitBossKillEcho(ServerLevel world, ServerPlayer player, EchoWorldState state, BlockPos pos, String bossType) {
+        List<EchoFrame> frames = FrameSampler.sampleFrames(world, player, pos, 80);
+        if (frames.isEmpty()) return;
 
         var equipment = EquipmentSnapshot.capture(player);
         
-        // E6: World first check will be integrated into EchoService.createEchoFromFrames
         var record = EchoService.createEchoFromFrames(
                 world,
                 player,
                 EchoEventType.BOSS_KILL,
+                bossType,
                 pos,
                 frames,
                 equipment

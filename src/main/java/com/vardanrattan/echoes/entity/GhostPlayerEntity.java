@@ -7,11 +7,11 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 
 /**
- * Client-side playback controller for a single ghost.
+ * Client-side playback controller for a ghost recording.
  *
- * This is not yet wired into Minecraft's entity system; it is a pure data/logic
- * object that steps through EchoFrame data and exposes interpolated pose +
- * opacity for rendering.
+ * Operates as a lightweight pose and interpolation controller that steps
+ * through EchoFrame data and computes Catmull-Rom spline positions, Slerp rotations,
+ * and alpha transitions for rendering without server entity overhead.
  */
 public final class GhostPlayerEntity {
 
@@ -88,7 +88,7 @@ public final class GhostPlayerEntity {
         );
     }
 
-    private Pose getInterpolatedPose(float tickDelta) {
+    public Pose getInterpolatedPose(float tickDelta) {
         float renderTick = currentTick + tickDelta;
 
         if (frames.size() == 1) {

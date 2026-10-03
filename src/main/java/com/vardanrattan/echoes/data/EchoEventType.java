@@ -18,6 +18,14 @@ public enum EchoEventType {
     JOURNEY_LONG,      // Tier 1 long journey end
     JOURNEY_MARATHON,  // Tier 3 marathon journey
 
+    // Tier 1 Whispers
+    FIRST_SLEEP,
+    FIRST_TRADE,
+
+    // Tier 3 Scars / special
+    FIRST_ELYTRA_FLIGHT,
+    CATASTROPHIC_DEATH,
+
     // Manual / special
     MANUAL_CRYSTAL,
     WORLD_FIRST

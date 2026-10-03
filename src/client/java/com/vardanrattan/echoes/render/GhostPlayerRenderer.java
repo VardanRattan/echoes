@@ -4,21 +4,30 @@ import com.vardanrattan.echoes.config.EchoesConfig;
 import com.vardanrattan.echoes.data.EchoTier;
 import com.vardanrattan.echoes.data.EquipmentSnapshot;
 import com.vardanrattan.echoes.entity.GhostPlayerEntity;
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.ColorTargetState;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.resources.Identifier;
-import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.player.PlayerSkin;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 
 import net.minecraft.core.particles.ParticleTypes;
 import java.util.UUID;
@@ -28,12 +37,9 @@ import java.util.UUID;
  *
  * Updated for Minecraft 26.1.1 using Mojang mappings.
  *
- * NOTE ON ALPHA: The 26.1 rendering pipeline moved from MultiBufferSource
- * (interceptable per-vertex) to SubmitNodeCollector (baked geometry).
- * Per-vertex alpha injection via a wrapper is no longer possible at this
- * call site. Ghost transparency is currently expressed through particle
- * density and the isInvisibleToPlayer flag for WHISPER tier.
- * True alpha blending requires a custom RenderLayer — tracked as future work.
+ * Uses a custom translucent RenderType with the ghost_desaturate shader
+ * for true per-vertex alpha blending. The shader desaturates the player
+ * texture and applies ghost tinting and alpha via vertexColor.
  */
 public final class GhostPlayerRenderer {
 
@@ -49,6 +55,7 @@ public final class GhostPlayerRenderer {
     public static void renderGhost(
             PoseStack poseStack,
             SubmitNodeCollector submitCollector,
+            net.minecraft.client.renderer.state.level.CameraRenderState cameraState,
             float tickDelta,
             GhostPlayerEntity ghost,
             EchoTier tier,
@@ -67,166 +74,133 @@ public final class GhostPlayerRenderer {
         if (world == null || client.player == null)
             return;
 
-        GhostPlayerEntity.Pose pose = ghost.getCurrentPose();
+        GhostPlayerEntity.Pose pose = ghost.getInterpolatedPose(tickDelta);
         double wx = anchor.getX() + 0.5 + pose.x();
         double wy = anchor.getY() + pose.y();
         double wz = anchor.getZ() + 0.5 + pose.z();
 
-        Vec3 cam = client.gameRenderer.getMainCamera().position();
-        double distSq = cam.distanceToSqr(wx, wy, wz);
+        Vec3 camPos = (cameraState != null && cameraState.pos != null)
+                ? cameraState.pos
+                : client.gameRenderer.getMainCamera().position();
 
-        // OPTIMIZATION: Distance Culling (don't render models if > 64 blocks away)
+        double distSq = camPos.distanceToSqr(wx, wy, wz);
         if (distSq > 4096) {
             return;
         }
-
-        EchoesConfig cfg = EchoesConfig.get();
-        float baseOpacity = switch (tier) {
-            case WHISPER -> cfg.getWhisperOpacity();
-            case MARK -> cfg.getMarkOpacity();
-            case SCAR, WORLD_FIRST -> cfg.getScarOpacity();
-        };
-
-        float effectiveAlpha = Mth.clamp(alpha * baseOpacity, 0.0f, 1.0f);
-
-        EntityRenderDispatcher erd = client.getEntityRenderDispatcher();
-        
-        poseStack.pushPose();
-        poseStack.translate(wx - cam.x, wy - cam.y, wz - cam.z);
-
-        float yaw = pose.yaw();
-        float pitch = pose.pitch();
 
         PlayerSkin skin = (playerUuid != null)
                 ? DefaultPlayerSkin.get(playerUuid)
                 : DefaultPlayerSkin.getDefaultSkin();
 
-        AbstractClientPlayer standInPlayer = client.player;
+        AvatarRenderState state = new AvatarRenderState();
+        state.scale = 1.0f;
+        state.bodyRot = pose.yaw();
+        state.yRot = pose.yaw();
+        state.xRot = pose.pitch();
+        state.walkAnimationPos = pose.limbSwing();
+        state.walkAnimationSpeed = 0.8f;
+        state.skin = skin;
+        state.showHat = true;
+        state.showJacket = true;
+        state.showLeftPants = true;
+        state.showRightPants = true;
+        state.showLeftSleeve = true;
+        state.showRightSleeve = true;
+        state.showCape = true;
+
+        // Render as translucent spectator ghost
+        state.isInvisible = true;
+        state.isInvisibleToPlayer = false;
+        state.lightCoords = 15728880;
+
+        var animState = pose.animationState();
+        if (animState != null) {
+            switch (animState) {
+                case CROUCHING -> state.isCrouching = true;
+                case ELYTRA_FLYING -> state.isFallFlying = true;
+                case SWIMMING -> state.isVisuallySwimming = true;
+                case DYING -> {
+                    float progress = Math.min((ghost.getCurrentTick() + tickDelta), 19.0f);
+                    state.deathTime = progress;
+                }
+                default -> {}
+            }
+        }
+
+        if (equipment != null) {
+            state.headEquipment = equipment.getStack(EquipmentSnapshot.Slot.HEAD);
+            state.chestEquipment = equipment.getStack(EquipmentSnapshot.Slot.CHEST);
+            state.legsEquipment = equipment.getStack(EquipmentSnapshot.Slot.LEGS);
+            state.feetEquipment = equipment.getStack(EquipmentSnapshot.Slot.FEET);
+            state.rightHandItemStack = equipment.getStack(EquipmentSnapshot.Slot.MAIN_HAND);
+            state.leftHandItemStack = equipment.getStack(EquipmentSnapshot.Slot.OFF_HAND);
+        }
+
         renderingGhost = true;
         try {
-            AvatarRenderer<AbstractClientPlayer> playerRenderer = erd.getPlayerRenderer(standInPlayer);
-
-            // Create a fresh state instead of extracting from a live entity
-            AvatarRenderState state = new AvatarRenderState();
-
-            // Apply ghost pose data
-            state.bodyRot = yaw;
-            state.yRot = yaw;
-            state.xRot = pitch;
-            state.walkAnimationPos = pose.limbSwing();
-            state.walkAnimationSpeed = 0.8f;
-            state.skin = skin;
-
-            // Fetch the model from the renderer
-            var model = playerRenderer.getModel();
-            model.setupAnim(state);
-
-            // Safely get the texture identifier regardless of mappings (record method vs field)
-            net.minecraft.resources.Identifier tex = null;
-            try {
-                tex = (net.minecraft.resources.Identifier) state.skin.getClass().getMethod("texture").invoke(state.skin);
-            } catch (Exception e) {
-                try {
-                    tex = (net.minecraft.resources.Identifier) state.skin.getClass().getField("texture").get(state.skin);
-                } catch (Exception e2) {
-                    tex = net.minecraft.resources.Identifier.tryParse("minecraft:textures/entity/steve.png");
-                }
-            }
-
-            // Safely get the translucent RenderType regardless of mappings
-            RenderType renderType = null;
-            try {
-                for (java.lang.reflect.Method m : RenderType.class.getMethods()) {
-                    if (m.getName().toLowerCase().contains("translucent") && m.getParameterCount() == 1 && m.getParameterTypes()[0] == net.minecraft.resources.Identifier.class) {
-                        renderType = (RenderType) m.invoke(null, tex);
-                        break;
-                    }
-                }
-                if (renderType == null) {
-                    for (java.lang.reflect.Method m : RenderType.class.getMethods()) {
-                        if (m.getName().toLowerCase().contains("translucent") && m.getParameterCount() == 2 && m.getParameterTypes()[0] == net.minecraft.resources.Identifier.class) {
-                            renderType = (RenderType) m.invoke(null, tex, true);
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Ignore
-            }
-
-            com.mojang.blaze3d.vertex.VertexConsumer buffer = client.renderBuffers().bufferSource().getBuffer(renderType);
-
-            // TIER SPECIFIC COLORING
-            int r, g, b;
-            if (tier == EchoTier.WORLD_FIRST) {
-                r = 255; g = 230; b = 150; // Ethereal Gold
-            } else {
-                r = 200; g = 220; b = 255; // Pale Blue
-            }
-
-            int a = (int) (effectiveAlpha * 255);
-            int color = (a << 24) | (r << 16) | (g << 8) | b;
-
-            // PULSING GLOW: Oscillate overlay brightness based on tick
-            float pulse = (Mth.sin((ghost.getCurrentTick() + tickDelta) * 0.1f) + 1.0f) * 0.5f;
-            int light = (int) (15728880 * (0.8f + (pulse * 0.2f))); // Very slight pulse in brightness
-            light = Mth.clamp(light, 0, 15728880);
-
-            model.renderToBuffer(poseStack, buffer, light, net.minecraft.client.renderer.entity.LivingEntityRenderer.getOverlayCoords(state, 0.0f), color);
-
+            EntityRenderDispatcher erd = client.getEntityRenderDispatcher();
+            erd.submit(
+                    state,
+                    cameraState,
+                    wx - camPos.x,
+                    wy - camPos.y,
+                    wz - camPos.z,
+                    poseStack,
+                    submitCollector
+            );
         } catch (Exception e) {
             com.vardanrattan.echoes.Echoes.LOGGER.error("Ghost render failed", e);
         } finally {
             renderingGhost = false;
         }
-
-        poseStack.popPose();
-
-        spawnGhostParticles(world, ghost, tier, wx, wy, wz, distSq);
     }
 
     // -------------------------------------------------------------------------
-    // Particles
+    // Particles (Ticked at 20 Hz in ClientTickEvents, not during render frames)
     // -------------------------------------------------------------------------
 
-    private static void spawnGhostParticles(
+    public static void spawnGhostParticles(
             ClientLevel world,
             GhostPlayerEntity ghost,
             EchoTier tier,
-            double wx, double wy, double wz,
-            double distSq) {
-            
-        // OPTIMIZATION: Distance-based particle throttling
-        if (distSq > 1024) return; // No particles beyond 32 blocks
-        float distanceMultiplier = (distSq > 256) ? 0.25f : 1.0f; // 25% particles beyond 16 blocks
+            BlockPos anchor) {
+        GhostPlayerEntity.Pose pose = ghost.getCurrentPose();
+        double wx = anchor.getX() + 0.5 + pose.x();
+        double wy = anchor.getY() + pose.y();
+        double wz = anchor.getZ() + 0.5 + pose.z();
 
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.particleEngine == null)
+        if (mc == null || mc.particleEngine == null || mc.player == null)
             return;
+
+        double distSq = mc.player.distanceToSqr(wx, wy, wz);
+        if (distSq > 1024) return; // No particles beyond 32 blocks
+        float distanceMultiplier = (distSq > 256) ? 0.25f : 1.0f;
 
         float alpha = ghost.getAlpha();
         float intensity = Mth.clamp(alpha, 0.05f, 1.0f) * distanceMultiplier;
 
         switch (tier) {
             case WHISPER -> {
-                if (world.getRandom().nextInt(12) < Math.round(intensity * 2)) {
-                    createParticle(world, ParticleTypes.SOUL, wx, wy, wz, 0.0, 0.03, 0.0);
+                if (world.getRandom().nextInt(16) < Math.round(intensity * 2)) {
+                    createParticle(world, ParticleTypes.SOUL, wx, wy + 0.2, wz, 0.0, 0.02, 0.0);
                 }
             }
             case MARK -> {
-                if (world.getRandom().nextInt(7) < Math.round(intensity * 3)) {
-                    createParticle(world, ParticleTypes.SOUL, wx, wy, wz, orbit(world), orbit(world), orbit(world));
-                    createParticle(world, ParticleTypes.ENCHANT, wx, wy, wz, orbit(world), 0.04, orbit(world));
+                if (world.getRandom().nextInt(8) < Math.round(intensity * 3)) {
+                    createParticle(world, ParticleTypes.SOUL, wx, wy + 0.2, wz, orbit(world), 0.02, orbit(world));
+                    createParticle(world, ParticleTypes.ENCHANT, wx, wy + 0.8, wz, orbit(world), 0.04, orbit(world));
                 }
             }
             case SCAR, WORLD_FIRST -> {
-                if (world.getRandom().nextInt(5) < Math.round(intensity * 4)) {
-                    createParticle(world, ParticleTypes.SOUL, wx, wy, wz, rand(world), 0.05, rand(world));
-                    createParticle(world, ParticleTypes.END_ROD, wx, wy, wz, rand(world), 0.06, rand(world));
+                if (world.getRandom().nextInt(5) < Math.round(intensity * 3)) {
+                    createParticle(world, ParticleTypes.SOUL, wx, wy + 0.2, wz, rand(world), 0.03, rand(world));
+                    createParticle(world, ParticleTypes.END_ROD, wx, wy + 0.8, wz, rand(world), 0.04, rand(world));
                 }
             }
         }
     }
+
 
     private static void createParticle(
             ClientLevel world,
