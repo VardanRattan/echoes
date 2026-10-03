@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#141c2e" />
+      <stop offset="70%" stop-color="#0a0f1d" />
+      <stop offset="100%" stop-color="#050811" />
+    </radialGradient>
+
+    <!-- Echo Ring Gradient -->
+    <radialGradient id="ringGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#4deeea" stop-opacity="0" />
+      <stop offset="85%" stop-color="#4deeea" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#7c4dff" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Crystal Shading Gradients -->
+    <linearGradient id="facetTopLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e0f7fa" />
+      <stop offset="100%" stop-color="#4deeea" />
+    </linearGradient>
+
+    <linearGradient id="facetTopRight" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b388ff" />
+      <stop offset="100%" stop-color="#7c4dff" />
+    </linearGradient>
+
+    <linearGradient id="facetCenter" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#80deea" />
+      <stop offset="100%" stop-color="#00b4d8" />
+    </linearGradient>
+
+    <linearGradient id="facetBottomLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0096c7" />
+      <stop offset="100%" stop-color="#03045e" />
+    </linearGradient>
+
+    <linearGradient id="facetBottomRight" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#651fff" />
+      <stop offset="100%" stop-color="#311b92" />
+    </linearGradient>
+
+    <!-- Core Glow Filter -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="ambientGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="36" />
+    </filter>
+  </defs>
+
+  <!-- Base Rounded Container -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#223254" stroke-width="3" stroke-opacity="0.6" />
+
+  <!-- Radiating Memory / Echo Soundwaves -->
+  <circle cx="256" cy="256" r="215" fill="none" stroke="#00ffff" stroke-width="1.5" stroke-opacity="0.12" stroke-dasharray="8 6" />
+  <circle cx="256" cy="256" r="175" fill="none" stroke="#7c4dff" stroke-width="2" stroke-opacity="0.22" stroke-dasharray="12 8" />
+  <circle cx="256" cy="256" r="135" fill="none" stroke="#4deeea" stroke-width="2.5" stroke-opacity="0.35" />
+  <circle cx="256" cy="256" r="95" fill="none" stroke="#b388ff" stroke-width="3" stroke-opacity="0.45" />
+
+  <!-- Ambient Underglow -->
+  <circle cx="256" cy="256" r="70" fill="#4deeea" opacity="0.35" filter="url(#ambientGlow)" />
+  <circle cx="256" cy="256" r="50" fill="#7c4dff" opacity="0.3" filter="url(#ambientGlow)" />
+
+  <!-- Floating Soul Particles -->
+  <circle cx="160" cy="180" r="4" fill="#80deea" opacity="0.6" />
+  <circle cx="140" cy="290" r="3" fill="#b388ff" opacity="0.5" />
+  <circle cx="360" cy="190" r="3.5" fill="#4deeea" opacity="0.6" />
+  <circle cx="340" cy="310" r="4.5" fill="#b388ff" opacity="0.7" />
+  <circle cx="256" cy="115" r="3" fill="#ffffff" opacity="0.8" />
+  <circle cx="256" cy="395" r="3" fill="#80deea" opacity="0.5" />
+
+  <!-- The Echo Crystal (Faceted Geometry) -->
+  <g filter="url(#glow)">
+    <!-- Top Apex Point: (256, 130) -->
+    <!-- Center Left Point: (180, 240) -->
+    <!-- Center Point: (256, 270) -->
+    <!-- Center Right Point: (332, 240) -->
+    <!-- Bottom Apex Point: (256, 385) -->
+
+    <!-- Top Left Facet -->
+    <polygon points="256,130 180,240 256,270" fill="url(#facetTopLeft)" />
+
+    <!-- Top Right Facet -->
+    <polygon points="256,130 332,240 256,270" fill="url(#facetTopRight)" />
+
+    <!-- Bottom Left Facet -->
+    <polygon points="180,240 256,270 256,385" fill="url(#facetBottomLeft)" />
+
+    <!-- Bottom Right Facet -->
+    <polygon points="332,240 256,270 256,385" fill="url(#facetBottomRight)" />
+
+    <!-- Inner Core Crystal Shard (Gleam) -->
+    <polygon points="256,160 215,245 256,268" fill="#ffffff" opacity="0.55" />
+    <polygon points="256,160 256,268 297,245" fill="#e0f7fa" opacity="0.4" />
+    <polygon points="215,245 256,268 256,345" fill="#00e5ff" opacity="0.35" />
+    <polygon points="297,245 256,268 256,345" fill="#7c4dff" opacity="0.35" />
+
+    <!-- Facet Edge Lines -->
+    <line x1="256" y1="130" x2="256" y2="385" stroke="#ffffff" stroke-width="2" stroke-opacity="0.75" />
+    <line x1="180" y1="240" x2="332" y2="240" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.6" />
+    <line x1="256" y1="130" x2="180" y2="240" stroke="#c8f5ff" stroke-width="2" stroke-opacity="0.9" />
+    <line x1="256" y1="130" x2="332" y2="240" stroke="#e1d4ff" stroke-width="2" stroke-opacity="0.9" />
+    <line x1="180" y1="240" x2="256" y2="385" stroke="#80deea" stroke-width="2" stroke-opacity="0.7" />
+    <line x1="332" y1="240" x2="256" y2="385" stroke="#b388ff" stroke-width="2" stroke-opacity="0.7" />
+
+    <!-- Radiant Highlights -->
+    <circle cx="256" cy="130" r="3" fill="#ffffff" />
+    <circle cx="256" cy="270" r="4" fill="#ffffff" opacity="0.9" />
+    <circle cx="180" cy="240" r="2.5" fill="#ffffff" opacity="0.8" />
+    <circle cx="332" cy="240" r="2.5" fill="#ffffff" opacity="0.8" />
+  </g>
+</svg>
